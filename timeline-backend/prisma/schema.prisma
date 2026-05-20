@@ -1,0 +1,28 @@
+datasource db {
+  provider = "mysql" 
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model TimelineDataset {
+  id          Int            @id @default(autoincrement())        
+  name        String         
+  createdAt   DateTime       @default(now())
+  macAddress  String         @db.VarChar(17) @default("") 
+
+  events      TimelineData[] 
+  @@index([macAddress]) 
+}
+
+model TimelineData {
+  id                Int             @id @default(autoincrement())
+  title             String   
+  date              DateTime 
+  description       String   
+  createdAt         DateTime        @default(now())
+  timelineDatasetId Int         
+  timelineDataset   TimelineDataset @relation(fields: [timelineDatasetId], references: [id], onDelete: Cascade)
+}
