@@ -3,7 +3,7 @@ import {
   FaMoon, FaSun, FaStream, FaUpload, FaSave,
   FaTable, FaChartBar, FaArrowsAltH, FaArrowsAltV,
   FaCalendarAlt, FaRegCalendar, FaCalendarDay,
-  FaDownload, FaSpinner, FaDatabase, FaTimes
+  FaDownload, FaSpinner, FaDatabase, FaTimes, FaQuestionCircle
 } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -16,6 +16,7 @@ import TimelineRenderer from "./TimelineRenderer";
 import EventDetailsModal from "./EventDetailsModal";
 import YearGroupModal from "./YearGroupModal";
 import EditModal from "./EditModal";
+import HelpPage from "./HelpPage";
 
 const ZOOM_META = [
   { key: "year",  label: "Year",  Icon: FaCalendarAlt },
@@ -41,9 +42,11 @@ export default function TimelineView() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const fileRef = useRef();
   const timelineRef = useRef();
+  const timelineBodyRef = useRef();
 
   const th = dark
     ? { bg: "#0a0f1e", surface: "#111827", text: "#fff", border: "#334155" }
@@ -98,23 +101,219 @@ export default function TimelineView() {
   };
 
   const handleDownloadImage = async () => {
-    if (!timelineRef.current) return;
+    if (!events || events.length === 0) return;
     setDownloading(true);
+
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(timelineRef.current, {
-        backgroundColor: dark ? "#111827" : "#ffffff",
-        scale: 2,
-        useCORS: true,
-        logging: false,
+      const DPR        = 2;       
+      const OUTER_PAD  = 48;      
+      const COL_GAP    = 40;      
+      const CARD_W     = 340;    
+      const CARD_H     = 108;     
+      const CARD_GAP   = 14;     
+      const DOT_R      = 14;      
+      const DOT_OFFSET = DOT_R + 8;             
+      const CARD_OFFSET = DOT_OFFSET + DOT_R + 16; 
+      const COL_W      = CARD_OFFSET + CARD_W;  
+      const TITLE_H    = 80;      
+      const FOOTER_H   = 36;
+
+      const MAX_COL_H  = 2400;
+      const rowH       = CARD_H + CARD_GAP;
+      const ROWS_PER_COL = Math.max(1, Math.floor(MAX_COL_H / rowH));
+      const NUM_COLS   = Math.ceil(events.length / ROWS_PER_COL);
+
+      const timelineName = selectedTimeline?.name || datasetName || "Timeline";
+
+      const totalW = OUTER_PAD + NUM_COLS * COL_W + (NUM_COLS - 1) * COL_GAP + OUTER_PAD;
+      const tallestCol = Math.min(events.length, ROWS_PER_COL);
+      const totalH = OUTER_PAD + TITLE_H + tallestCol * rowH + FOOTER_H + OUTER_PAD;
+
+      const canvas  = document.createElement("canvas");
+      canvas.width  = totalW * DPR;
+      canvas.height = totalH * DPR;
+      const ctx     = canvas.getContext("2d");
+      ctx.scale(DPR, DPR);
+
+      const bgColor   = dark ? "#0f172a" : "#f8fafc";
+      const textColor = dark ? "#f1f5f9" : "#111827";
+      const subColor  = dark ? "#94a3b8" : "#64748b";
+      const cardBg    = dark ? "#1e293b" : "#ffffff";
+      const cardBdr   = dark ? "#334155" : "#e2e8f0";
+      const accentClr = "#2563eb";
+
+      const trunc = (text, maxW) => {
+        if (ctx.measureText(text).width <= maxW) return text;
+        let lo = 0, hi = text.length;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >> 1;
+          ctx.measureText(text.slice(0, mid) + "…").width <= maxW ? (lo = mid) : (hi = mid - 1);
+        }
+        return text.slice(0, lo) + "…";
+      };
+
+      const roundRect = (x, y, w, h, r) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      };
+
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, totalW, totalH);
+
+      for (let c = 0; c < NUM_COLS; c++) {
+        const colX = OUTER_PAD + c * (COL_W + COL_GAP);
+        ctx.fillStyle = dark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)";
+        roundRect(colX - 8, OUTER_PAD + TITLE_H - 8, COL_W + 16, tallestCol * rowH + 16, 16);
+        ctx.fill();
+      }
+
+      
+      const titleGrad = ctx.createLinearGradient(OUTER_PAD, 0, OUTER_PAD + 300, 0);
+      titleGrad.addColorStop(0, "#2563eb");
+      titleGrad.addColorStop(1, "#7c3aed");
+      roundRect(OUTER_PAD, OUTER_PAD, 10, 44, 3);
+      ctx.fillStyle = titleGrad;
+      ctx.fill();
+
+      ctx.font         = "700 26px Inter, sans-serif";
+      ctx.fillStyle    = textColor;
+      ctx.textBaseline = "middle";
+      ctx.fillText(timelineName, OUTER_PAD + 22, OUTER_PAD + 22);
+
+      ctx.font      = "400 13px Inter, sans-serif";
+      ctx.fillStyle = subColor;
+      ctx.textBaseline = "top";
+      ctx.fillText(
+        `${events.length} events · ${zoom} view · ${NUM_COLS} column${NUM_COLS > 1 ? "s" : ""}`,
+        OUTER_PAD + 22,
+        OUTER_PAD + 50
+      );
+
+      if (NUM_COLS > 1) {
+        for (let c = 0; c < NUM_COLS; c++) {
+          const colX  = OUTER_PAD + c * (COL_W + COL_GAP);
+          const start = c * ROWS_PER_COL + 1;
+          const end   = Math.min((c + 1) * ROWS_PER_COL, events.length);
+          ctx.font      = "600 11px Inter, sans-serif";
+          ctx.fillStyle = dark ? "#475569" : "#94a3b8";
+          ctx.textBaseline = "top";
+          ctx.fillText(`Events ${start}–${end}`, colX + DOT_OFFSET + DOT_R + 16, OUTER_PAD + TITLE_H - 20);
+        }
+      }
+
+      events.forEach((ev, i) => {
+        const col   = Math.floor(i / ROWS_PER_COL);
+        const row   = i % ROWS_PER_COL;
+        const colX  = OUTER_PAD + col * (COL_W + COL_GAP);
+        const dotX  = colX + DOT_OFFSET;
+        const cardX = colX + CARD_OFFSET;
+        const cardY = OUTER_PAD + TITLE_H + row * rowH;
+        const dotY  = cardY + CARD_H / 2;
+
+        if (row < ROWS_PER_COL - 1 && i < events.length - 1 && Math.floor((i + 1) / ROWS_PER_COL) === col) {
+          const nextDotY = dotY + rowH;
+          const lineGrad = ctx.createLinearGradient(dotX, dotY, dotX, nextDotY);
+          lineGrad.addColorStop(0, "#2563eb66");
+          lineGrad.addColorStop(1, "#7c3aed33");
+          ctx.strokeStyle = lineGrad;
+          ctx.lineWidth   = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(dotX, dotY + DOT_R + 2);
+          ctx.lineTo(dotX, nextDotY - DOT_R - 2);
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, DOT_R + 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#2563eb14";
+        ctx.fill();
+
+        
+        const dotGrad = ctx.createRadialGradient(dotX, dotY - 3, 0, dotX, dotY, DOT_R);
+        dotGrad.addColorStop(0, "#60a5fa");
+        dotGrad.addColorStop(1, "#7c3aed");
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);
+        ctx.fillStyle = dotGrad;
+        ctx.fill();
+
+        ctx.shadowColor   = dark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.08)";
+        ctx.shadowBlur    = 10;
+        ctx.shadowOffsetY = 3;
+
+        roundRect(cardX, cardY, CARD_W, CARD_H, 12);
+        ctx.fillStyle   = cardBg;
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur  = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = cardBdr;
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+
+        const accentGrad = ctx.createLinearGradient(cardX, 0, cardX + CARD_W, 0);
+        accentGrad.addColorStop(0, "#2563eb");
+        accentGrad.addColorStop(1, "#7c3aed");
+        ctx.fillStyle = accentGrad;
+        ctx.fillRect(cardX, cardY, CARD_W, 3);
+
+        const dateStr = ev.date
+          ? new Date(ev.date).toLocaleDateString("en-US", {
+              year: "numeric", month: "short",
+              ...(zoom === "day" ? { day: "numeric" } : {}),
+            })
+          : "";
+        ctx.font         = "600 11px Inter, sans-serif";
+        ctx.fillStyle    = accentClr;
+        ctx.textBaseline = "top";
+        ctx.fillText(dateStr, cardX + 14, cardY + 14);
+
+        const title = ev.title || ev.name || "Untitled";
+        ctx.font      = "700 14px Inter, sans-serif";
+        ctx.fillStyle = textColor;
+        ctx.fillText(trunc(title, CARD_W - 28), cardX + 14, cardY + 33);
+
+        const desc = ev.description || "";
+        ctx.font      = "400 12px Inter, sans-serif";
+        ctx.fillStyle = subColor;
+        ctx.fillText(trunc(desc, CARD_W - 28), cardX + 14, cardY + 56);
+
+        ctx.font         = "700 10px Inter, sans-serif";
+        ctx.fillStyle    = dark ? "#334155" : "#e2e8f0";
+        ctx.textBaseline = "middle";
+        ctx.textAlign    = "center";
+        ctx.fillText(`${i + 1}`, dotX, dotY);
+        ctx.textAlign    = "left";
       });
-      const link = document.createElement("a");
-      const name = selectedTimeline?.name || "timeline";
-      link.download = `${name.replace(/\s+/g, "_")}.png`;
-      link.href = canvas.toDataURL("image/png");
+
+      ctx.font         = "400 11px Inter, sans-serif";
+      ctx.fillStyle    = dark ? "#1e293b" : "#e2e8f0";
+      ctx.textBaseline = "bottom";
+      ctx.fillRect(0, totalH - FOOTER_H, totalW, FOOTER_H);
+      ctx.fillStyle = dark ? "#475569" : "#94a3b8";
+      ctx.fillText(
+        `Timeline View · ${timelineName} · ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
+        OUTER_PAD,
+        totalH - 12
+      );
+
+      const link    = document.createElement("a");
+      link.download = `${timelineName.replace(/\s+/g, "_")}.png`;
+      link.href     = canvas.toDataURL("image/png");
       link.click();
-    } catch {
-      alert("Download failed.");
+
+    } catch (err) {
+      console.error("Export error:", err);
+      alert("Export failed. See console for details.");
     } finally {
       setDownloading(false);
     }
@@ -169,6 +368,14 @@ export default function TimelineView() {
 
   const events = selectedTimeline ? selectedTimeline.events : parsed;
   const yearGroups = groupEventsByYear(events);
+
+  if (helpOpen) {
+    return (
+      <AnimatePresence mode="wait">
+        <HelpPage key="help" dark={dark} onBack={() => setHelpOpen(false)} />
+      </AnimatePresence>
+    );
+  }
 
   return (
     <div style={{
@@ -299,84 +506,30 @@ export default function TimelineView() {
 
         /* ── MOBILE ≤ 640px ── */
         @media (max-width: 640px) {
-          .tl-header {
-            padding: 0 14px;
-            height: 58px;
-          }
-          .tl-logo-icon {
-            width: 34px !important;
-            height: 34px !important;
-            border-radius: 10px !important;
-          }
+          .tl-header { padding: 0 14px; height: 58px; }
+          .tl-logo-icon { width: 34px !important; height: 34px !important; border-radius: 10px !important; }
           .tl-logo h2 { font-size: 0.95rem; }
           .tl-datasets-label { display: none; }
-
+          .tl-help-label { display: none; }
           .tl-main { padding: 12px 12px 40px; }
-
           .tl-card { padding: 16px 14px; border-radius: 15px; margin-bottom: 14px; }
           .tl-card h2 { font-size: 1.05rem !important; margin-bottom: 14px !important; }
           .tl-card h3 { font-size: 0.95rem !important; }
-
-          .tl-upload-row {
-            flex-direction: column;
-            align-items: stretch;
-          }
+          .tl-upload-row { flex-direction: column; align-items: stretch; }
           .tl-upload-row .tl-btn { width: 100%; justify-content: center; }
-          .tl-file-name {
-            font-size: 12px !important;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-          }
-
-          .tl-preview-header {
-            flex-direction: column;
-            align-items: flex-start !important;
-            gap: 10px !important;
-          }
+          .tl-file-name { font-size: 12px !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .tl-preview-header { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
           .tl-generate-btn { width: 100%; justify-content: center !important; }
-
-          .tl-controls {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 10px;
-            margin-bottom: 16px;
-          }
+          .tl-controls { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
           .tl-controls-title { font-size: 0.95rem; }
-
-          .tl-zoom-group {
-            width: 100%;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-          }
+          .tl-zoom-group { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
           .tl-zoom-group::-webkit-scrollbar { display: none; }
           .tl-zoom-group button { flex-shrink: 0; }
-
-          .tl-view-group {
-            width: 100%;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-          }
-          .tl-view-group .tl-btn {
-            justify-content: center;
-            padding: 9px 10px !important;
-            font-size: 12px !important;
-          }
-          .tl-view-group .tl-btn:last-child:nth-child(odd) {
-            grid-column: 1 / -1;
-          }
-
-          .tl-sidebar {
-            width: 100% !important;
-            border-right: none !important;
-          }
-
-          .tl-year-hint {
-            font-size: 11px !important;
-            padding: 7px 11px !important;
-          }
+          .tl-view-group { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .tl-view-group .tl-btn { justify-content: center; padding: 9px 10px !important; font-size: 12px !important; }
+          .tl-view-group .tl-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+          .tl-sidebar { width: 100% !important; border-right: none !important; }
+          .tl-year-hint { font-size: 11px !important; padding: 7px 11px !important; }
         }
 
         /* ── TABLET 641-1024px ── */
@@ -393,7 +546,6 @@ export default function TimelineView() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
-      {/* Header */}
       <header className="tl-header" style={{ background: th.surface, borderBottom: `1px solid ${th.border}` }}>
         <div className="tl-logo">
           <div
@@ -417,6 +569,15 @@ export default function TimelineView() {
 
         <div className="tl-header-actions">
           <button
+            onClick={() => setHelpOpen(true)}
+            className="tl-btn"
+            style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text, padding: "9px 14px", borderRadius: 11, fontSize: 12 }}
+          >
+            <FaQuestionCircle size={13} />
+            <span className="tl-help-label">Help</span>
+          </button>
+
+          <button
             onClick={() => setSidebarOpen(true)}
             className="tl-btn"
             style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", padding: "9px 14px", borderRadius: 11, fontSize: 12 }}
@@ -438,6 +599,7 @@ export default function TimelineView() {
         </div>
       </header>
 
+      {/* Sidebar overlay */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
@@ -454,11 +616,7 @@ export default function TimelineView() {
             initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 240 }}
             className="tl-sidebar"
-            style={{
-              background: th.surface,
-              borderRight: `1px solid ${th.border}`,
-              boxShadow: "8px 0 28px rgba(0,0,0,0.18)",
-            }}
+            style={{ background: th.surface, borderRight: `1px solid ${th.border}`, boxShadow: "8px 0 28px rgba(0,0,0,0.18)" }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
               <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 700 }}>
@@ -493,11 +651,7 @@ export default function TimelineView() {
             Upload &amp; Process Data
           </h2>
           <div className="tl-upload-row">
-            <button
-              onClick={() => fileRef.current.click()}
-              className="tl-btn"
-              style={{ background: "#2563eb" }}
-            >
+            <button onClick={() => fileRef.current.click()} className="tl-btn" style={{ background: "#2563eb" }}>
               <FaUpload size={13} /> Select CSV
             </button>
             <input type="file" accept=".csv" ref={fileRef} onChange={handleFile} hidden />
@@ -505,18 +659,10 @@ export default function TimelineView() {
             {file && (
               <span
                 className="tl-file-name"
-                style={{
-                  fontWeight: 600, fontSize: 13,
-                  display: "flex", alignItems: "center", gap: 6,
-                  color: dark ? "#94a3b8" : "#475569",
-                  flex: 1, minWidth: 0,
-                  overflow: "hidden",
-                }}
+                style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 6, color: dark ? "#94a3b8" : "#475569", flex: 1, minWidth: 0, overflow: "hidden" }}
               >
                 <FaTable size={12} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {file.name}
-                </span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
               </span>
             )}
 
@@ -592,19 +738,12 @@ export default function TimelineView() {
                     key={key}
                     onClick={() => setZoom(key)}
                     style={{
-                      padding: "7px 12px",
-                      border: "none",
-                      borderRadius: 9,
-                      cursor: "pointer",
+                      padding: "7px 12px", border: "none", borderRadius: 9, cursor: "pointer",
                       background: zoom === key ? "#2563eb" : "transparent",
                       color: zoom === key ? "#fff" : th.text,
-                      fontWeight: 600,
-                      fontSize: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      transition: "background 0.2s",
-                      whiteSpace: "nowrap",
+                      fontWeight: 600, fontSize: 12,
+                      display: "flex", alignItems: "center", gap: 5,
+                      transition: "background 0.2s", whiteSpace: "nowrap",
                     }}
                   >
                     <Icon size={10} /> {label}
@@ -641,10 +780,7 @@ export default function TimelineView() {
                   disabled={downloading}
                   className="tl-btn"
                   style={{
-                    background: "#059669",
-                    padding: "9px 14px",
-                    borderRadius: 10,
-                    fontSize: 12,
+                    background: "#059669", padding: "9px 14px", borderRadius: 10, fontSize: 12,
                     opacity: downloading ? 0.65 : 1,
                     cursor: downloading ? "not-allowed" : "pointer",
                   }}
@@ -661,29 +797,26 @@ export default function TimelineView() {
               <div
                 className="tl-year-hint"
                 style={{
-                  marginBottom: 14,
-                  padding: "8px 13px",
-                  borderRadius: 10,
+                  marginBottom: 14, padding: "8px 13px", borderRadius: 10,
                   background: dark ? "#1e293b" : "#eff6ff",
-                  color: "#2563eb",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
+                  color: "#2563eb", fontSize: 12, fontWeight: 600,
+                  display: "inline-flex", alignItems: "center", gap: 6,
                 }}
               >
                 <FaCalendarAlt size={11} /> Year view — tap dots to expand.
               </div>
             )}
 
-            <div style={{
-              overflowX: view === "horizontal" ? "auto" : "visible",
-              WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-              width: "100%",
-            }}
+            
+            <div
+              ref={timelineBodyRef}
+              style={{
+                overflowX: view === "horizontal" ? "auto" : "visible",
+                WebkitOverflowScrolling: "touch",
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                width: "100%",
+              }}
               className="tl-noscrollbar"
             >
               <TimelineRenderer
