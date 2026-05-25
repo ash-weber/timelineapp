@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
 import { FaTimes, FaCalendarAlt } from "react-icons/fa";
 import { formatDate } from "../utils/helpers";
-import { getEventIcon } from "../utils/eventIcons";
+import { useEventIcon } from "../context/IconContext"; 
 
 export default function EventDetailsModal({ event, dark, onClose, zoom }) {
-  const { Icon, color } = getEventIcon(event);
+  const { Icon, color } = useEventIcon(event);
 
   return (
     <div style={{
@@ -13,7 +13,7 @@ export default function EventDetailsModal({ event, dark, onClose, zoom }) {
       zIndex: 2000,
       display: "flex",
       justifyContent: "center",
-      alignItems: "flex-end",    
+      alignItems: "flex-end",
       backdropFilter: "blur(8px)",
       padding: "0",
     }}>
@@ -43,18 +43,16 @@ export default function EventDetailsModal({ event, dark, onClose, zoom }) {
           margin: "0 auto",
         }}
       >
-        {/* Top accent bar */}
         <div style={{
           position: "absolute", top: 0, left: 0, right: 0, height: 4,
           background: `linear-gradient(90deg, ${color}, #7c3aed)`,
         }} />
 
-        {/* Mobile drag handle */}
-        <div style={{
+        <div className="edm-handle" style={{
           width: 36, height: 4, background: dark ? "#334155" : "#e2e8f0",
           borderRadius: 4, margin: "4px auto 18px",
           display: "none",
-        }} className="edm-handle" />
+        }} />
 
         <button
           onClick={onClose}

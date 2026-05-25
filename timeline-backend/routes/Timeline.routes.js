@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const timelineController = require('../controller/Timeline.controller'); // Unga controller path-ah verify pannikonga
+const timelineController = require('../controller/Timeline.controller');  
 
 router.post('/save', timelineController.saveTimelineData);
 

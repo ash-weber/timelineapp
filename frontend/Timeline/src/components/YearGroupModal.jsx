@@ -1,7 +1,55 @@
 import { motion } from "framer-motion";
 import { FaTimes, FaCalendarAlt, FaLayerGroup } from "react-icons/fa";
 import { formatDate } from "../utils/helpers";
-import { getEventIcon } from "../utils/eventIcons";
+import { useEventIcon } from "../context/IconContext";
+
+function YearEventRow({ ev, dark, onClose, onSelectEvent }) {
+  const { Icon, color } = useEventIcon(ev);
+  return (
+    <div
+      onClick={() => { onClose(); onSelectEvent(ev); }}
+      style={{
+        padding: "13px 14px",
+        borderRadius: 14,
+        border: `1px solid ${dark ? "#334155" : "#e2e8f0"}`,
+        background: dark ? "#0f172a" : "#f8fafc",
+        cursor: "pointer",
+        transition: "border-color 0.18s",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = color)}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = dark ? "#334155" : "#e2e8f0")}
+    >
+      <div style={{
+        width: 38, height: 38, borderRadius: 11,
+        background: `${color}18`,
+        border: `1.5px solid ${color}44`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0,
+      }}>
+        <Icon size={16} color={color} />
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#2563eb", fontWeight: 700, fontSize: 10, marginBottom: 3 }}>
+          <FaCalendarAlt size={9} /> {formatDate(ev.date, "month")}
+        </div>
+        <div style={{
+          color: dark ? "#fff" : "#111827",
+          fontWeight: 700, fontSize: 13,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {ev.title}
+        </div>
+        <div style={{ color: dark ? "#94a3b8" : "#64748b", fontSize: 11, marginTop: 2 }}>
+          {ev.description.substring(0, 65)}…
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function YearGroupModal({ year, events, dark, zoom, onClose, onSelectEvent }) {
   return (
@@ -41,7 +89,6 @@ export default function YearGroupModal({ year, events, dark, zoom, onClose, onSe
           position: "relative",
         }}
       >
-        {/* Drag handle */}
         <div
           className="ygm-handle"
           style={{
@@ -75,54 +122,15 @@ export default function YearGroupModal({ year, events, dark, zoom, onClose, onSe
         </h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-          {events.map((ev, i) => {
-            const { Icon, color } = getEventIcon(ev);
-            return (
-              <div
-                key={i}
-                onClick={() => { onClose(); onSelectEvent(ev); }}
-                style={{
-                  padding: "13px 14px",
-                  borderRadius: 14,
-                  border: `1px solid ${dark ? "#334155" : "#e2e8f0"}`,
-                  background: dark ? "#0f172a" : "#f8fafc",
-                  cursor: "pointer",
-                  transition: "border-color 0.18s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = color)}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = dark ? "#334155" : "#e2e8f0")}
-              >
-                <div style={{
-                  width: 38, height: 38, borderRadius: 11,
-                  background: `${color}18`,
-                  border: `1.5px solid ${color}44`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                }}>
-                  <Icon size={16} color={color} />
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#2563eb", fontWeight: 700, fontSize: 10, marginBottom: 3 }}>
-                    <FaCalendarAlt size={9} /> {formatDate(ev.date, "month")}
-                  </div>
-                  <div style={{
-                    color: dark ? "#fff" : "#111827",
-                    fontWeight: 700, fontSize: 13,
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {ev.title}
-                  </div>
-                  <div style={{ color: dark ? "#94a3b8" : "#64748b", fontSize: 11, marginTop: 2 }}>
-                    {ev.description.substring(0, 65)}…
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {events.map((ev, i) => (
+            <YearEventRow
+              key={ev._eid ?? ev.id ?? i}
+              ev={ev}
+              dark={dark}
+              onClose={onClose}
+              onSelectEvent={onSelectEvent}
+            />
+          ))}
         </div>
       </motion.div>
     </div>
