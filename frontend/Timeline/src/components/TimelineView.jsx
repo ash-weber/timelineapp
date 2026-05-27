@@ -95,8 +95,7 @@ export default function TimelineView() {
   const [showMapper, setShowMapper]     = useState(false);
   const [needsMapping, setNeedsMapping] = useState(false);
 
-  // fileReady: parsed data is available, user can now preview
-  // previewed: user has clicked Preview Table at least once — unlocks Generate Timeline
+  
   const [fileReady, setFileReady]       = useState(false);
   const [previewed, setPreviewed]       = useState(false);
 
@@ -173,7 +172,6 @@ export default function TimelineView() {
         const canAutoMap = !!(nameCol && dateCol);
 
         if (canAutoMap) {
-          // Standard CSV — auto-map silently, no mapper shown
           setNeedsMapping(false);
           Papa.parse(f, {
             header: true,
@@ -196,12 +194,10 @@ export default function TimelineView() {
 
               setParsed(valid);
               setShowMapper(false);
-              // fileReady=true → show "Preview Table" button only
               setFileReady(true);
             },
           });
         } else {
-          // Custom CSV — needs manual mapping first
           setNeedsMapping(true);
           setShowMapper(true);
           setFileReady(false);
@@ -239,7 +235,6 @@ export default function TimelineView() {
 
         setParsed(valid);
         setShowMapper(false);
-        // After mapping confirmed → show "Preview Table" button only
         setFileReady(true);
         setPreviewed(false);
         setPreview(false);
@@ -805,7 +800,6 @@ export default function TimelineView() {
                 </span>
               )}
 
-              {/* Re-map button: only shown after mapping was done and file is ready (custom CSV path) */}
               {fileReady && !showMapper && needsMapping && (
                 <button
                   onClick={() => { setShowMapper(true); setPreview(false); setPreviewed(false); setGenerated(false); }}
@@ -816,11 +810,7 @@ export default function TimelineView() {
                 </button>
               )}
 
-              {/*
-                STANDARD FLOW:  fileReady + not previewed yet → show "Preview Table"
-                After previewing → show "Preview Table" (to re-view) + "Generate Timeline"
-                While in generated view → show "View Table" to go back to preview
-              */}
+             
 
               {fileReady && !showMapper && !generated && !previewed && (
                 <button
@@ -879,7 +869,6 @@ export default function TimelineView() {
             )}
           </div>
 
-          {/* Column mapper — only for custom CSVs */}
           <AnimatePresence>
             {showMapper && csvHeaders.length > 0 && (
               <ColumnMapper
@@ -890,14 +879,12 @@ export default function TimelineView() {
                 onConfirm={handleMappingConfirm}
                 onCancel={() => {
                   setShowMapper(false);
-                  // If we had previously mapped data keep fileReady, else revert
                   if (parsed.length === 0) setNeedsMapping(true);
                 }}
               />
             )}
           </AnimatePresence>
 
-          {/* Preview table — shown after clicking Preview Table */}
           {preview && !generated && (
             <div className="tl-card" style={{ background: th.surface, border: `1px solid ${th.border}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
