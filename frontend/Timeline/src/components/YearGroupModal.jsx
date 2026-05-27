@@ -16,8 +16,9 @@ function YearEventRow({ ev, dark, onClose, onSelectEvent }) {
         cursor: "pointer",
         transition: "border-color 0.18s",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         gap: 12,
+        marginBottom: 8,
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = color)}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = dark ? "#334155" : "#e2e8f0")}
@@ -39,19 +40,26 @@ function YearEventRow({ ev, dark, onClose, onSelectEvent }) {
         <div style={{
           color: dark ? "#fff" : "#111827",
           fontWeight: 700, fontSize: 13,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          marginBottom: 3,
         }}>
           {ev.title}
         </div>
-        <div style={{ color: dark ? "#94a3b8" : "#64748b", fontSize: 11, marginTop: 2 }}>
-          {ev.description.substring(0, 65)}…
-        </div>
+        {ev.description && (
+          <div style={{
+            color: dark ? "#94a3b8" : "#64748b", fontSize: 11, lineHeight: 1.5,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}>
+            {ev.description}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default function YearGroupModal({ year, events, dark, zoom, onClose, onSelectEvent }) {
+export default function YearGroupModal({ year, events, dark, grouping, onClose, onSelectEvent }) {
   return (
     <div style={{
       position: "fixed", inset: 0,
@@ -84,7 +92,7 @@ export default function YearGroupModal({ year, events, dark, zoom, onClose, onSe
           maxHeight: "80vh",
           overflowY: "auto",
           borderRadius: 24,
-          padding: 32,
+          padding: 28,
           border: `1px solid ${dark ? "#334155" : "#ddd"}`,
           position: "relative",
         }}
@@ -121,7 +129,7 @@ export default function YearGroupModal({ year, events, dark, zoom, onClose, onSe
           {year} — {events.length} Event{events.length !== 1 ? "s" : ""}
         </h2>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {events.map((ev, i) => (
             <YearEventRow
               key={ev._eid ?? ev.id ?? i}

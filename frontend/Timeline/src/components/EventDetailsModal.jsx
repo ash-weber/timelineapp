@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 import { FaTimes, FaCalendarAlt } from "react-icons/fa";
 import { formatDate } from "../utils/helpers";
-import { useEventIcon } from "../context/IconContext"; 
+import { useEventIcon } from "../context/IconContext";
 
-export default function EventDetailsModal({ event, dark, onClose, zoom }) {
+export default function EventDetailsModal({ event, dark, onClose, grouping, dateFormat }) {
   const { Icon, color } = useEventIcon(event);
 
   return (
@@ -23,6 +23,7 @@ export default function EventDetailsModal({ event, dark, onClose, zoom }) {
         }
         @media (max-width: 640px) {
           .edm-sheet { border-radius: 22px 22px 0 0 !important; width: 100% !important; padding: 24px 20px 36px !important; }
+          .edm-handle { display: block !important; }
         }
       `}</style>
 
@@ -76,24 +77,29 @@ export default function EventDetailsModal({ event, dark, onClose, zoom }) {
           <Icon size={22} color={color} />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#2563eb", fontWeight: 700, fontSize: 12, marginBottom: 8 }}>
-          <FaCalendarAlt size={12} /> {formatDate(event.date, zoom)}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          color: "#2563eb", fontWeight: 700, fontSize: 12, marginBottom: 8,
+        }}>
+          <FaCalendarAlt size={12} />
+          {formatDate(event.date, grouping, dateFormat)}
         </div>
 
-        <h2 style={{ color: dark ? "#fff" : "#111827", marginTop: 0, marginBottom: 12, fontSize: "1.15rem", lineHeight: 1.3 }}>
+        <h2 style={{
+          color: dark ? "#fff" : "#111827",
+          marginTop: 0, marginBottom: 12,
+          fontSize: "1.15rem", lineHeight: 1.3,
+        }}>
           {event.title}
         </h2>
 
-        <p style={{ color: dark ? "#94a3b8" : "#64748b", lineHeight: 1.7, fontSize: 14, margin: 0 }}>
+        <p style={{
+          color: dark ? "#94a3b8" : "#64748b",
+          lineHeight: 1.7, fontSize: 14, margin: 0,
+        }}>
           {event.description}
         </p>
       </motion.div>
-
-      <style>{`
-        @media (max-width: 640px) {
-          .edm-handle { display: block !important; }
-        }
-      `}</style>
     </div>
   );
 }

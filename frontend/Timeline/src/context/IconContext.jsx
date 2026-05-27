@@ -11,8 +11,15 @@ export function IconProvider({ children }) {
   const [version, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
-  const applyOverride = useCallback((eventId, iconKey) => { _set(eventId, iconKey); bump(); }, [bump]);
-  const removeOverride = useCallback((eventId) => { _clear(eventId); bump(); }, [bump]);
+  const applyOverride = useCallback(
+    (eventId, iconKey) => { _set(eventId, iconKey); bump(); },
+    [bump]
+  );
+
+  const removeOverride = useCallback(
+    (eventId) => { _clear(eventId); bump(); },
+    [bump]
+  );
 
   return (
     <IconContext.Provider value={{ version, applyOverride, removeOverride }}>
@@ -32,6 +39,7 @@ export function useIconActions() {
   if (!ctx) throw new Error("useIconActions must be used inside <IconProvider>");
   return { applyOverride: ctx.applyOverride, removeOverride: ctx.removeOverride };
 }
+
 
 export function useEventIcon(event) {
   useIconVersion(); 

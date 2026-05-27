@@ -10,14 +10,14 @@ import { useEventIcon, useIconActions } from "../context/IconContext";
 
 const GROUPS = ["All", ...Array.from(new Set(ALL_ICONS.map((i) => i.group)))];
 
-export default function TimelineCard({ event, zoom, dark, onClick }) {
+export default function TimelineCard({ event, grouping, dateFormat, dark, onClick }) {
   const [showPicker, setShowPicker]   = useState(false);
-  const [iconHovered, setIconHovered] = useState(false); 
+  const [iconHovered, setIconHovered] = useState(false);
   const [search, setSearch]           = useState("");
   const [activeGroup, setActiveGroup] = useState("All");
 
-  const { Icon, color }               = useEventIcon(event);
-  const { applyOverride, removeOverride } = useIconActions();
+  const { Icon, color }                    = useEventIcon(event);
+  const { applyOverride, removeOverride }  = useIconActions();
 
   const theme = dark
     ? { bg: "#1e293b", text: "#fff", sub: "#94a3b8", border: "#334155",
@@ -28,7 +28,7 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return ALL_ICONS.filter((ic) => {
-      const groupOk = activeGroup === "All" || ic.group === activeGroup;
+      const groupOk  = activeGroup === "All" || ic.group === activeGroup;
       const searchOk = !q || ic.label.toLowerCase().includes(q) || ic.key.includes(q);
       return groupOk && searchOk;
     });
@@ -46,7 +46,7 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
   };
 
   const openPicker = (e) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     setSearch("");
     setActiveGroup("All");
     setShowPicker(true);
@@ -56,10 +56,10 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
     <>
       <style>{`
         @media (max-width: 640px) {
-          .tl-card-inner { min-width: 220px !important; padding: 15px !important; }
-          .tl-card-inner .card-title { font-size: 14px !important; }
-          .tl-card-inner .card-desc  { font-size: 12px !important; }
-          .tl-card-icon { width: 36px !important; height: 36px !important; border-radius: 11px !important; }
+          .tl-card-inner { min-width: 200px !important; padding: 14px !important; }
+          .tl-card-inner .card-title { font-size: 13px !important; }
+          .tl-card-inner .card-desc  { font-size: 11px !important; }
+          .tl-card-icon { width: 34px !important; height: 34px !important; border-radius: 10px !important; }
           .icon-picker-panel { width: 96vw !important; max-height: 90vh !important; }
         }
         .picker-scroll::-webkit-scrollbar { width: 5px; }
@@ -76,80 +76,105 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
         <motion.div
           className="tl-card-inner"
           layout
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          whileHover={{ y: -6, scale: 1.01 }}
+          whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }}
           onClick={onClick}
           style={{
-            minWidth: 260, background: theme.bg, borderRadius: 18, padding: 18,
-            boxShadow: "0 8px 22px rgba(0,0,0,0.06)", cursor: "pointer",
-            border: `1px solid ${theme.border}`, position: "relative", overflow: "hidden",
+            width: "100%",
+            minWidth: 240,
+            background: theme.bg,
+            borderRadius: 16,
+            padding: "16px 16px 40px",    
+            boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+            cursor: "pointer",
+            border: `1px solid ${theme.border}`,
+            position: "relative",
+            overflow: "hidden",
+            boxSizing: "border-box",
           }}
         >
           <div style={{
-            position: "absolute", top: 0, left: 0, right: 0, height: 4,
+            position: "absolute", top: 0, left: 0, right: 0, height: 3,
             background: `linear-gradient(90deg, ${color}, #7c3aed)`,
-            borderRadius: "18px 18px 0 0",
+            borderRadius: "16px 16px 0 0",
           }} />
 
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
-            <div 
-              className="tl-card-icon" 
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 2 }}>
+            <div
+              className="tl-card-icon"
               onMouseEnter={() => setIconHovered(true)}
               onMouseLeave={() => setIconHovered(false)}
-              onClick={(e) => {
-                e.stopPropagation();
-                openPicker(e);
-              }}
+              onClick={openPicker}
               style={{
-                width: 40, height: 40, borderRadius: 12,
+                width: 38, height: 38, borderRadius: 11,
                 background: `${color}18`, border: `1.5px solid ${color}44`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                position: "relative", overflow: "hidden", cursor: "pointer"
+                position: "relative", overflow: "hidden", cursor: "pointer",
+                flexShrink: 0,
               }}
             >
-              <Icon size={18} color={color} />
-
+              <Icon size={16} color={color} />
               <AnimatePresence>
                 {iconHovered && (
                   <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     style={{
-                      position: "absolute",
-                      inset: 0,
-                      background: dark ? "rgba(30, 41, 59, 0.9)" : "rgba(255, 255, 255, 0.9)",
+                      position: "absolute", inset: 0,
+                      background: dark ? "rgba(30,41,59,0.92)" : "rgba(255,255,255,0.92)",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      color: color,
+                      color,
                     }}
                   >
-                    <FaPencilAlt size={12} />
+                    <FaPencilAlt size={11} />
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
+
+=            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              color: "#2563eb", fontWeight: 700, fontSize: 10,
+              background: "#2563eb12", padding: "3px 8px", borderRadius: 20,
+              whiteSpace: "nowrap",
+            }}>
+              <FaCalendarAlt size={9} /> {formatDate(event.date, grouping, dateFormat)}
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#2563eb", fontWeight: 700, fontSize: 11, marginBottom: 7 }}>
-            <FaCalendarAlt size={10} /> {formatDate(event.date, zoom)}
-          </div>
-          <div className="card-title" style={{ color: theme.text, fontSize: 15, fontWeight: 700, marginBottom: 7, lineHeight: 1.3 }}>
+          <div
+            className="card-title"
+            style={{
+              color: theme.text, fontSize: 14, fontWeight: 700,
+              marginBottom: 6, lineHeight: 1.35,
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
             {event.title}
           </div>
-          <div className="card-desc" style={{ color: theme.sub, fontSize: 12, lineHeight: 1.55 }}>
-            {event.description.substring(0, 80)}…
+
+          <div
+            className="card-desc"
+            style={{
+              color: theme.sub, fontSize: 12, lineHeight: 1.55,
+              display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {event.description}
           </div>
-          <div style={{ position: "absolute", bottom: 13, right: 13, color, opacity: 0.4 }}>
-            <FaExpandAlt size={11} />
+
+          <div style={{ position: "absolute", bottom: 12, right: 13, color, opacity: 0.4 }}>
+            <FaExpandAlt size={10} />
           </div>
         </motion.div>
 
         <AnimatePresence>
           {showPicker && (
             <>
-=              <div
+              <div
                 onClick={() => setShowPicker(false)}
                 style={{
                   position: "fixed", inset: 0, zIndex: 999,
@@ -157,7 +182,6 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
                   backdropFilter: "blur(6px)",
                 }}
               />
-
               <motion.div
                 className="icon-picker-panel"
                 initial={{ opacity: 0, scale: 0.94, y: "-44%", x: "-50%" }}
@@ -214,18 +238,16 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
 
                   <div className="group-tab-scroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none" }}>
                     {GROUPS.map((g) => {
-                      const count = g === "All" ? ALL_ICONS.length : ALL_ICONS.filter((i) => i.group === g).length;
+                      const count  = g === "All" ? ALL_ICONS.length : ALL_ICONS.filter((i) => i.group === g).length;
                       const active = activeGroup === g;
                       return (
-                        <button
-                          key={g}
-                          onClick={() => setActiveGroup(g)}
-                          style={{
-                            padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", whiteSpace: "nowrap", fontSize: 12, fontWeight: active ? 700 : 500,
-                            background: active ? "linear-gradient(135deg, #2563eb, #7c3aed)" : (dark ? "#0f172a" : "#f1f5f9"),
-                            color: active ? "#fff" : (dark ? "#94a3b8" : "#64748b"), transition: "all 0.15s", flexShrink: 0,
-                          }}
-                        >
+                        <button key={g} onClick={() => setActiveGroup(g)} style={{
+                          padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer",
+                          whiteSpace: "nowrap", fontSize: 12, fontWeight: active ? 700 : 500,
+                          background: active ? "linear-gradient(135deg, #2563eb, #7c3aed)" : (dark ? "#0f172a" : "#f1f5f9"),
+                          color: active ? "#fff" : (dark ? "#94a3b8" : "#64748b"),
+                          transition: "all 0.15s", flexShrink: 0,
+                        }}>
                           {g} <span style={{ marginLeft: 5, fontSize: 10, opacity: active ? 0.8 : 0.6 }}>{count}</span>
                         </button>
                       );
@@ -249,8 +271,10 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
                             title={label}
                             onClick={() => handleIconSelect(entry)}
                             style={{
-                              borderRadius: 14, background: dark ? "#0f172a" : "#f8fafc", border: `1.5px solid ${dark ? "#1e293b" : "#e2e8f0"}`,
-                              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", padding: "12px 4px 10px",
+                              borderRadius: 14, background: dark ? "#0f172a" : "#f8fafc",
+                              border: `1.5px solid ${dark ? "#1e293b" : "#e2e8f0"}`,
+                              display: "flex", flexDirection: "column", alignItems: "center",
+                              justifyContent: "center", gap: 6, cursor: "pointer", padding: "12px 4px 10px",
                             }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = `${ec}15`; e.currentTarget.style.borderColor = ec; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = dark ? "#0f172a" : "#f8fafc"; e.currentTarget.style.borderColor = dark ? "#1e293b" : "#e2e8f0"; }}
@@ -269,17 +293,22 @@ export default function TimelineCard({ event, zoom, dark, onClick }) {
                 </div>
 
                 <div style={{ padding: "12px 16px 16px", borderTop: `1px solid ${dark ? "#2d3748" : "#f1f5f9"}`, display: "flex", gap: 10 }}>
-                  <button
-                    onClick={handleReset}
-                    style={{
-                      flex: 1, padding: "11px", borderRadius: 12, background: dark ? "#334155" : "#f1f5f9",
-                      border: "none", color: dark ? "#e2e8f0" : "#334155", fontWeight: 600, fontSize: 13, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                    }}
-                  >
+                  <button onClick={handleReset} style={{
+                    flex: 1, padding: "11px", borderRadius: 12,
+                    background: dark ? "#334155" : "#f1f5f9",
+                    border: "none", color: dark ? "#e2e8f0" : "#334155",
+                    fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                  }}>
                     <FaUndo size={11} /> Reset to auto
                   </button>
-                  <button onClick={() => setShowPicker(false)} style={{ padding: "11px 18px", borderRadius: 12, background: dark ? "#1e293b" : "#e2e8f0", border: `1px solid ${theme.border}`, color: dark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                  <button onClick={() => setShowPicker(false)} style={{
+                    padding: "11px 18px", borderRadius: 12,
+                    background: dark ? "#1e293b" : "#e2e8f0",
+                    border: `1px solid ${theme.border}`,
+                    color: dark ? "#94a3b8" : "#64748b",
+                    fontWeight: 600, fontSize: 13, cursor: "pointer",
+                  }}>
                     Cancel
                   </button>
                 </div>
