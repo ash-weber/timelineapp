@@ -95,7 +95,10 @@ export default function TimelineView() {
   const [showMapper, setShowMapper]     = useState(false);
   const [needsMapping, setNeedsMapping] = useState(false);
 
+  // fileReady: parsed data is available, user can now preview
+  // previewed: user has clicked Preview Table at least once — unlocks Generate Timeline
   const [fileReady, setFileReady]       = useState(false);
+  const [previewed, setPreviewed]       = useState(false);
 
   const [logoHovered, setLogoHovered]       = useState(false);
   const [logoPickerOpen, setLogoPickerOpen] = useState(false);
@@ -136,6 +139,7 @@ export default function TimelineView() {
     setNeedsMapping(false);
     setValidationErrors([]);
     setPreview(false);
+    setPreviewed(false);
     setFileReady(false);
     setGenerated(false);
     setSelectedTimeline(null);
@@ -158,7 +162,6 @@ export default function TimelineView() {
         setCsvHeaders(headers);
         setCsvRawRows(results.data || []);
 
-        const headersLower = headers.map((h) => h.toLowerCase().trim());
         const NAME_KEYS  = ["name", "title", "event", "event name", "label", "summary"];
         const DATE_KEYS  = ["date", "time", "when", "timestamp", "day", "datetime"];
         const DESC_KEYS  = ["description", "desc", "details", "detail", "note", "notes", "info", "body", "content", "text"];
@@ -170,6 +173,7 @@ export default function TimelineView() {
         const canAutoMap = !!(nameCol && dateCol);
 
         if (canAutoMap) {
+          // Standard CSV — auto-map silently, no mapper shown
           setNeedsMapping(false);
           Papa.parse(f, {
             header: true,
@@ -192,10 +196,12 @@ export default function TimelineView() {
 
               setParsed(valid);
               setShowMapper(false);
+              // fileReady=true → show "Preview Table" button only
               setFileReady(true);
             },
           });
         } else {
+          // Custom CSV — needs manual mapping first
           setNeedsMapping(true);
           setShowMapper(true);
           setFileReady(false);
@@ -204,7 +210,6 @@ export default function TimelineView() {
     });
   };
 
-  
   const handleMappingConfirm = (mapping) => {
     Papa.parse(file, {
       header: true,
@@ -233,9 +238,11 @@ export default function TimelineView() {
         else setValidationErrors([]);
 
         setParsed(valid);
-        setShowMapper(false);   
-        setFileReady(true);     
-        setPreview(false);      
+        setShowMapper(false);
+        // After mapping confirmed → show "Preview Table" button only
+        setFileReady(true);
+        setPreviewed(false);
+        setPreview(false);
         setGenerated(false);
         setSelectedTimeline(null);
       },
@@ -785,13 +792,11 @@ export default function TimelineView() {
                 <span className="tl-file-name" style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 6, color: dark ? "#94a3b8" : "#475569", flex: 1, minWidth: 0, overflow: "hidden" }}>
                   <FaTable size={12} style={{ flexShrink: 0 }} />
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
-
                   {fileReady && !showMapper && (
                     <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#dcfce7", color: "#16a34a", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
                       ✓ Ready
                     </span>
                   )}
-
                   {needsMapping && !showMapper && !fileReady && (
                     <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#fef3c7", color: "#d97706", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
                       ⚠ Mapping required
@@ -800,10 +805,10 @@ export default function TimelineView() {
                 </span>
               )}
 
-              
-              {fileReady && !showMapper && (
+              {/* Re-map button: only shown after mapping was done and file is ready (custom CSV path) */}
+              {fileReady && !showMapper && needsMapping && (
                 <button
-                  onClick={() => setShowMapper(true)}
+                  onClick={() => { setShowMapper(true); setPreview(false); setPreviewed(false); setGenerated(false); }}
                   className="tl-btn"
                   style={{ background: "#7c3aed" }}
                 >
@@ -811,30 +816,48 @@ export default function TimelineView() {
                 </button>
               )}
 
-              
-              {fileReady && !showMapper && !preview && !generated && (
-                <>
-                  <button
-                    onClick={() => { setPreview(true); setGenerated(false); setSelectedTimeline(null); }}
-                    className="tl-btn"
-                    style={{ background: "#059669" }}
-                  >
-                    <FaTable size={13} /> Preview Table
-                  </button>
-                  <button
-                    onClick={() => { setGenerated(true); setPreview(false); setSelectedTimeline(null); }}
-                    className="tl-btn"
-                    style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)" }}
-                  >
-                    <FaChartBar size={13} /> Generate Timeline
-                  </button>
-                </>
+              {/*
+                STANDARD FLOW:  fileReady + not previewed yet → show "Preview Table"
+                After previewing → show "Preview Table" (to re-view) + "Generate Timeline"
+                While in generated view → show "View Table" to go back to preview
+              */}
+
+              {fileReady && !showMapper && !generated && !previewed && (
+                <button
+                  onClick={() => {
+                    setPreview(true);
+                    setPreviewed(true);
+                    setGenerated(false);
+                    setSelectedTimeline(null);
+                  }}
+                  className="tl-btn"
+                  style={{ background: "#059669" }}
+                >
+                  <FaTable size={13} /> Preview Table
+                </button>
               )}
 
-              
+              {fileReady && !showMapper && !generated && previewed && (
+                <button
+                  onClick={() => {
+                    setPreview(true);
+                    setGenerated(false);
+                    setSelectedTimeline(null);
+                  }}
+                  className="tl-btn"
+                  style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text }}
+                >
+                  <FaTable size={13} /> Preview Table
+                </button>
+              )}
+
               {fileReady && !showMapper && generated && !selectedTimeline && (
                 <button
-                  onClick={() => { setPreview(true); setGenerated(false); setSelectedTimeline(null); }}
+                  onClick={() => {
+                    setPreview(true);
+                    setGenerated(false);
+                    setSelectedTimeline(null);
+                  }}
                   className="tl-btn"
                   style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text }}
                 >
@@ -856,6 +879,7 @@ export default function TimelineView() {
             )}
           </div>
 
+          {/* Column mapper — only for custom CSVs */}
           <AnimatePresence>
             {showMapper && csvHeaders.length > 0 && (
               <ColumnMapper
@@ -864,11 +888,16 @@ export default function TimelineView() {
                 sampleRows={csvRawRows}
                 dark={dark}
                 onConfirm={handleMappingConfirm}
-                onCancel={() => setShowMapper(false)}
+                onCancel={() => {
+                  setShowMapper(false);
+                  // If we had previously mapped data keep fileReady, else revert
+                  if (parsed.length === 0) setNeedsMapping(true);
+                }}
               />
             )}
           </AnimatePresence>
 
+          {/* Preview table — shown after clicking Preview Table */}
           {preview && !generated && (
             <div className="tl-card" style={{ background: th.surface, border: `1px solid ${th.border}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
@@ -952,6 +981,7 @@ export default function TimelineView() {
                       <option key={f.value} value={f.value}>{f.label}</option>
                     ))}
                   </select>
+
                   <div className="tl-seg-group" style={{ background: dark ? "#1e293b" : "#f1f5f9" }}>
                     <button
                       onClick={() => setView("horizontal")}
