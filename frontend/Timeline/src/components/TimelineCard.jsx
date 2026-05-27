@@ -86,7 +86,7 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
             minWidth: 240,
             background: theme.bg,
             borderRadius: 16,
-            padding: "16px 16px 40px",    
+            padding: "16px 16px 40px",
             boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
             cursor: "pointer",
             border: `1px solid ${theme.border}`,
@@ -133,7 +133,7 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
               </AnimatePresence>
             </div>
 
-=            <div style={{
+            <div style={{
               display: "flex", alignItems: "center", gap: 4,
               color: "#2563eb", fontWeight: 700, fontSize: 10,
               background: "#2563eb12", padding: "3px 8px", borderRadius: 20,
