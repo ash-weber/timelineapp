@@ -200,87 +200,50 @@ function YearEventCard({ ev, dark, dateFormat, onSelectEvent, isLast }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 12,
-        padding: "14px 16px",
-        cursor: "pointer",
-        borderRadius: 12,
-        margin: "0 8px",
-        marginBottom: isLast ? 8 : 6,
+        display: "flex", alignItems: "flex-start", gap: 12,
+        padding: "14px 16px", cursor: "pointer", borderRadius: 12,
+        margin: "0 8px", marginBottom: isLast ? 8 : 6,
         border: `1px solid ${hovered ? color + "55" : (dark ? "#1e293b" : "#e8edf5")}`,
-        background: hovered
-          ? (dark ? `${color}0d` : `${color}06`)
-          : (dark ? "#0f172a" : "#fafbfc"),
+        background: hovered ? (dark ? `${color}0d` : `${color}06`) : (dark ? "#0f172a" : "#fafbfc"),
         transition: "all 0.18s ease",
-        boxShadow: hovered
-          ? `0 4px 16px ${color}18`
-          : "0 1px 4px rgba(0,0,0,0.04)",
+        boxShadow: hovered ? `0 4px 16px ${color}18` : "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
       <div style={{
-        width: 38,
-        height: 38,
-        borderRadius: 11,
-        flexShrink: 0,
-        marginTop: 1,
-        background: `${color}18`,
-        border: `1.5px solid ${color}44`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transition: "transform 0.18s",
-        transform: hovered ? "scale(1.08)" : "scale(1)",
+        width: 38, height: 38, borderRadius: 11, flexShrink: 0, marginTop: 1,
+        background: `${color}18`, border: `1.5px solid ${color}44`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "transform 0.18s", transform: hovered ? "scale(1.08)" : "scale(1)",
       }}>
         <Icon size={15} color={color} />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          color: "#2563eb",
-          fontWeight: 700,
-          fontSize: 10,
-          marginBottom: 3,
-          letterSpacing: "0.02em",
+          display: "flex", alignItems: "center", gap: 5,
+          color: "#2563eb", fontWeight: 700, fontSize: 10, marginBottom: 3, letterSpacing: "0.02em",
         }}>
           <FaCalendarAlt size={8} />
-          {formatDate(ev.date, "month", dateFormat)}
+          {formatDate(ev.date, "month", dateFormat, ev._datePrecision)}
         </div>
         <div style={{
-          color: dark ? "#f1f5f9" : "#111827",
-          fontWeight: 700,
-          fontSize: 13,
-          lineHeight: 1.35,
-          marginBottom: ev.description ? 4 : 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          color: dark ? "#f1f5f9" : "#111827", fontWeight: 700, fontSize: 13,
+          lineHeight: 1.35, marginBottom: ev.description ? 4 : 0,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {ev.title}
         </div>
         {ev.description && (
           <div style={{
-            color: dark ? "#94a3b8" : "#64748b",
-            fontSize: 11,
-            lineHeight: 1.55,
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
+            color: dark ? "#94a3b8" : "#64748b", fontSize: 11, lineHeight: 1.55,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
           }}>
             {ev.description}
           </div>
         )}
       </div>
 
-      <FaExpandAlt
-        size={10}
-        color={color}
-        style={{ opacity: hovered ? 0.7 : 0.3, flexShrink: 0, marginTop: 5, transition: "opacity 0.18s" }}
-      />
+      <FaExpandAlt size={10} color={color} style={{ opacity: hovered ? 0.7 : 0.3, flexShrink: 0, marginTop: 5, transition: "opacity 0.18s" }} />
     </motion.div>
   );
 }
@@ -295,62 +258,34 @@ function YearSection({ year, events, dark, dateFormat, onSelectEvent, onSelectYe
       viewport={{ once: true }}
       transition={{ duration: 0.25 }}
       style={{
-        marginBottom: isLast ? 0 : 24,
-        borderRadius: 18,
-        overflow: "hidden",
+        marginBottom: isLast ? 0 : 24, borderRadius: 18, overflow: "hidden",
         border: `1px solid ${dark ? "#1e293b" : "#e2e8f0"}`,
         background: dark ? "#111827" : "#fff",
-        boxShadow: dark
-          ? "0 4px 20px rgba(0,0,0,0.25)"
-          : "0 4px 20px rgba(0,0,0,0.06)",
+        boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 4px 20px rgba(0,0,0,0.06)",
       }}
     >
       <div
         onClick={() => onSelectYear({ year, events })}
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          padding: "14px 16px",
+          display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
           background: "linear-gradient(135deg, #2563eb14, #7c3aed0a)",
           borderBottom: `1px solid ${dark ? "#1e293b" : "#eef2f7"}`,
-          cursor: "pointer",
-          userSelect: "none",
+          cursor: "pointer", userSelect: "none",
         }}
       >
         <div style={{
-          width: 52,
-          height: 52,
-          borderRadius: 14,
+          width: 52, height: 52, borderRadius: 14,
           background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 4px 12px rgba(37,99,235,0.3)",
-          flexShrink: 0,
-          color: "#fff",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 12px rgba(37,99,235,0.3)", flexShrink: 0, color: "#fff",
         }}>
           <span style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.1 }}>{year}</span>
-          <span style={{ fontSize: 9, opacity: 0.8, fontWeight: 500, lineHeight: 1.2 }}>
-            {eventCount} ev.
-          </span>
+          <span style={{ fontSize: 9, opacity: 0.8, fontWeight: 500, lineHeight: 1.2 }}>{eventCount} ev.</span>
         </div>
-
-        <div style={{
-          flex: 1,
-          height: 2,
-          borderRadius: 2,
-          background: `linear-gradient(90deg, #2563eb33, transparent)`,
-        }} />
-
+        <div style={{ flex: 1, height: 2, borderRadius: 2, background: "linear-gradient(90deg, #2563eb33, transparent)" }} />
         <span style={{
-          fontSize: 11,
-          color: dark ? "#64748b" : "#94a3b8",
-          fontWeight: 600,
-          whiteSpace: "nowrap",
-          padding: "4px 10px",
-          borderRadius: 20,
+          fontSize: 11, color: dark ? "#64748b" : "#94a3b8", fontWeight: 600,
+          whiteSpace: "nowrap", padding: "4px 10px", borderRadius: 20,
           background: dark ? "#1e293b" : "#f1f5f9",
         }}>
           {eventCount} event{eventCount !== 1 ? "s" : ""}
@@ -361,11 +296,8 @@ function YearSection({ year, events, dark, dateFormat, onSelectEvent, onSelectYe
         {events.map((ev, j) => (
           <YearEventCard
             key={ev._eid ?? ev.id ?? j}
-            ev={ev}
-            dark={dark}
-            dateFormat={dateFormat}
-            onSelectEvent={onSelectEvent}
-            isLast={j === events.length - 1}
+            ev={ev} dark={dark} dateFormat={dateFormat}
+            onSelectEvent={onSelectEvent} isLast={j === events.length - 1}
           />
         ))}
       </div>
@@ -377,17 +309,9 @@ function HorizontalYearColumn({ year, events, dark, dateFormat, onSelectEvent, o
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 0 }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: 280 }}>
-        <YearDot
-          year={year}
-          count={events.length}
-          dark={dark}
-          onClick={() => onSelectYear({ year, events })}
-        />
-
+        <YearDot year={year} count={events.length} dark={dark} onClick={() => onSelectYear({ year, events })} />
         <div style={{
-          width: "100%",
-          borderRadius: 14,
-          overflow: "hidden",
+          width: "100%", borderRadius: 14, overflow: "hidden",
           border: `1px solid ${dark ? "#1e293b" : "#e2e8f0"}`,
           background: dark ? "#111827" : "#fff",
           boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
@@ -395,25 +319,16 @@ function HorizontalYearColumn({ year, events, dark, dateFormat, onSelectEvent, o
           {events.map((ev, j) => (
             <HorizontalYearEventRow
               key={ev._eid ?? ev.id ?? j}
-              ev={ev}
-              dark={dark}
-              dateFormat={dateFormat}
-              onSelectEvent={onSelectEvent}
-              isLast={j === events.length - 1}
+              ev={ev} dark={dark} dateFormat={dateFormat}
+              onSelectEvent={onSelectEvent} isLast={j === events.length - 1}
             />
           ))}
         </div>
       </div>
-
       {!isLast && (
         <div style={{
-          width: 32,
-          height: 3,
-          flexShrink: 0,
-          alignSelf: "flex-start",
-          marginTop: 28,
-          background: "linear-gradient(90deg, #2563eb55, #7c3aed55)",
-          borderRadius: 10,
+          width: 32, height: 3, flexShrink: 0, alignSelf: "flex-start", marginTop: 28,
+          background: "linear-gradient(90deg, #2563eb55, #7c3aed55)", borderRadius: 10,
         }} />
       )}
     </div>
@@ -430,64 +345,38 @@ function HorizontalYearEventRow({ ev, dark, dateFormat, onSelectEvent, isLast })
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 12,
-        padding: "12px 14px",
-        cursor: "pointer",
-        transition: "background 0.15s",
+        display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px",
+        cursor: "pointer", transition: "background 0.15s",
         background: hovered ? (dark ? `${color}12` : `${color}08`) : "transparent",
         borderBottom: isLast ? "none" : `1px solid ${dark ? "#1e293b" : "#f1f5f9"}`,
       }}
     >
       <div style={{
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        flexShrink: 0,
-        marginTop: 1,
-        background: `${color}18`,
-        border: `1.5px solid ${color}44`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        width: 36, height: 36, borderRadius: 10, flexShrink: 0, marginTop: 1,
+        background: `${color}18`, border: `1.5px solid ${color}44`,
+        display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <Icon size={15} color={color} />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          color: "#2563eb",
-          fontWeight: 700,
-          fontSize: 10,
-          marginBottom: 2,
+          display: "flex", alignItems: "center", gap: 5,
+          color: "#2563eb", fontWeight: 700, fontSize: 10, marginBottom: 2,
         }}>
-          <FaCalendarAlt size={8} /> {formatDate(ev.date, "month", dateFormat)}
+          <FaCalendarAlt size={8} /> {formatDate(ev.date, "month", dateFormat, ev._datePrecision)}
         </div>
         <div style={{
-          color: dark ? "#fff" : "#111827",
-          fontWeight: 700,
-          fontSize: 13,
-          lineHeight: 1.3,
-          marginBottom: 2,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          color: dark ? "#fff" : "#111827", fontWeight: 700, fontSize: 13,
+          lineHeight: 1.3, marginBottom: 2,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {ev.title}
         </div>
         {ev.description && (
           <div style={{
-            color: dark ? "#94a3b8" : "#64748b",
-            fontSize: 11,
-            lineHeight: 1.5,
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
+            color: dark ? "#94a3b8" : "#64748b", fontSize: 11, lineHeight: 1.5,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
           }}>
             {ev.description}
           </div>
@@ -535,24 +424,16 @@ export default function TimelineRenderer({
     if (view === "horizontal") {
       return (
         <div style={{
-          display: "flex",
-          gap: 0,
-          minWidth: "max-content",
-          padding: "8px 8px 8px 0",
-          alignItems: "flex-start",
+          display: "flex", gap: 0, minWidth: "max-content",
+          padding: "8px 8px 8px 0", alignItems: "flex-start",
         }}>
           {years.map((year, i) => {
             const yEvents = [...yearGroups[year]].sort((a, b) => parseDate(a.date) - parseDate(b.date));
             return (
               <HorizontalYearColumn
-                key={year}
-                year={year}
-                events={yEvents}
-                dark={dark}
-                dateFormat={dateFormat}
-                onSelectEvent={onSelectEvent}
-                onSelectYear={onSelectYear}
-                isLast={i === years.length - 1}
+                key={year} year={year} events={yEvents} dark={dark}
+                dateFormat={dateFormat} onSelectEvent={onSelectEvent}
+                onSelectYear={onSelectYear} isLast={i === years.length - 1}
               />
             );
           })}
@@ -566,14 +447,9 @@ export default function TimelineRenderer({
           const yEvents = [...yearGroups[year]].sort((a, b) => parseDate(a.date) - parseDate(b.date));
           return (
             <YearSection
-              key={year}
-              year={year}
-              events={yEvents}
-              dark={dark}
-              dateFormat={dateFormat}
-              onSelectEvent={onSelectEvent}
-              onSelectYear={onSelectYear}
-              isLast={i === years.length - 1}
+              key={year} year={year} events={yEvents} dark={dark}
+              dateFormat={dateFormat} onSelectEvent={onSelectEvent}
+              onSelectYear={onSelectYear} isLast={i === years.length - 1}
             />
           );
         })}
@@ -584,11 +460,8 @@ export default function TimelineRenderer({
   if (view === "horizontal") {
     return (
       <div style={{
-        display: "flex",
-        gap: 20,
-        minWidth: "max-content",
-        padding: "8px 8px 8px 0",
-        alignItems: "flex-start",
+        display: "flex", gap: 20, minWidth: "max-content",
+        padding: "8px 8px 8px 0", alignItems: "flex-start",
       }}>
         {sortedEvents.map((ev, i) => (
           <div key={ev._eid ?? ev.id ?? i} style={{ display: "flex", alignItems: "center", gap: 20 }}>

@@ -139,7 +139,7 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
               background: "#2563eb12", padding: "3px 8px", borderRadius: 20,
               whiteSpace: "nowrap",
             }}>
-              <FaCalendarAlt size={9} /> {formatDate(event.date, grouping, dateFormat)}
+              <FaCalendarAlt size={9} /> {formatDate(event.date, grouping, dateFormat, event._datePrecision)}
             </div>
           </div>
 

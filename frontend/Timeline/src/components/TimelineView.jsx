@@ -11,7 +11,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Papa from "papaparse";
 
 import { API } from "../constants";
-import { applyColumnMapping as _applyColumnMapping, groupEventsByYear, formatDate, validateCSVEvents } from "../utils/helpers";
+import { applyColumnMapping as _applyColumnMapping, groupEventsByYear, formatDate, formatDateDisplay, validateCSVEvents } from "../utils/helpers";
 import { getOrDeviceMac } from "../utils/deviceMac";
 import { IconProvider } from "../context/IconContext";
 import { ALL_ICONS, getEventIcon } from "../utils/eventIcons";
@@ -49,15 +49,19 @@ const DESC_KEYS = [
 ];
 
 function detectCol(headers, exactKeys) {
-  // 1. exact match against known keys
   const exact = headers.find((h) => exactKeys.includes(h.toLowerCase().trim()));
   if (exact) return exact;
-  // 2. fuzzy: header contains any known key as a substring
   return headers.find((h) =>
     exactKeys.some((k) => h.toLowerCase().includes(k))
   ) || null;
 }
-// ─────────────────────────────────────────────────────────────────────────────
+
+function stripBlankLeadingRows(csvText) {
+  const text = csvText.replace(/^\uFEFF/, "");
+  const lines = text.split(/\r?\n/);
+  const filtered = lines.filter((line) => line.replace(/,/g, "").trim() !== "");
+  return filtered.join("\n");
+}
 
 function renderIconToCanvas(ctx, IconComponent, color, cx, cy, iconSize) {
   return new Promise((resolve) => {
@@ -141,7 +145,15 @@ export default function TimelineView() {
     } catch (err) { console.error("fetchSaved error:", err); }
   };
 
-  const handleFile = (e) => {
+  const readFileText = (f) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsText(f);
+    });
+
+  const handleFile = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
 
@@ -162,99 +174,116 @@ export default function TimelineView() {
     setParsed([]);
     setShowMapper(false);
 
-    Papa.parse(f, {
+    let rawText;
+    try {
+      rawText = await readFileText(f);
+    } catch {
+      setValidationErrors(["Failed to read the CSV file."]);
+      return;
+    }
+    const cleanedText = stripBlankLeadingRows(rawText);
+
+    const previewResult = Papa.parse(cleanedText, {
       header: true,
       skipEmptyLines: true,
       preview: 10,
       transformHeader: (h) => h.trim(),
-      complete: (results) => {
-        const headers = results.meta.fields || [];
-
-        if (headers.length === 0) {
-          setValidationErrors(["The CSV file appears to be empty or has no headers."]);
-          return;
-        }
-
-        setCsvHeaders(headers);
-        setCsvRawRows(results.data || []);
-
-        const nameCol = detectCol(headers, NAME_KEYS);
-        const dateCol = detectCol(headers, DATE_KEYS);
-        const descCol = detectCol(headers, DESC_KEYS);
-
-        const canAutoMap = !!(nameCol && dateCol);
-
-        if (canAutoMap) {
-          setNeedsMapping(false);
-          Papa.parse(f, {
-            header: true,
-            skipEmptyLines: true,
-            transformHeader: (h) => h.trim(),
-            complete: (fullResults) => {
-              const autoMapping = {
-                name:        nameCol.trim(),
-                date:        dateCol.trim(),
-                description: descCol ? descCol.trim() : "",
-              };
-              const mapped = applyColumnMapping(fullResults.data, autoMapping);
-              const { valid, errors } = validateCSVEvents(mapped);
-
-              if (valid.length === 0) {
-                setValidationErrors(errors.length > 0 ? errors : ["No valid timeline events found in this file."]);
-                return;
-              }
-              if (errors.length > 0) setValidationErrors(errors);
-
-              setParsed(valid);
-              setShowMapper(false);
-              setFileReady(true);
-            },
-          });
-        } else {
-          setNeedsMapping(true);
-          setShowMapper(true);
-          setFileReady(false);
-        }
-      },
     });
+
+    const headers = previewResult.meta.fields || [];
+
+    if (headers.length === 0) {
+      setValidationErrors(["The CSV file appears to be empty or has no headers."]);
+      return;
+    }
+
+    setCsvHeaders(headers);
+    setCsvRawRows(previewResult.data || []);
+
+    const nameCol = detectCol(headers, NAME_KEYS);
+    const dateCol = detectCol(headers, DATE_KEYS);
+    const descCol = detectCol(headers, DESC_KEYS);
+
+    const canAutoMap = !!(nameCol && dateCol);
+
+    if (canAutoMap) {
+      setNeedsMapping(false);
+
+      const fullResult = Papa.parse(cleanedText, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (h) => h.trim(),
+      });
+
+      const autoMapping = {
+        name:        nameCol.trim(),
+        date:        dateCol.trim(),
+        description: descCol ? descCol.trim() : "",
+      };
+      const mapped = applyColumnMapping(fullResult.data, autoMapping);
+      const { valid, errors } = validateCSVEvents(mapped);
+
+      if (valid.length === 0) {
+        setValidationErrors(errors.length > 0 ? errors : ["No valid timeline events found in this file."]);
+        return;
+      }
+      if (errors.length > 0) setValidationErrors(errors);
+
+      setParsed(valid);
+      setShowMapper(false);
+      setFileReady(true);
+
+    } else {
+      setNeedsMapping(true);
+      setShowMapper(true);
+      setFileReady(false);
+    }
   };
 
-  const handleMappingConfirm = (mapping) => {
-    Papa.parse(file, {
+  const handleMappingConfirm = async (mapping) => {
+    let rawText;
+    try {
+      rawText = await readFileText(file);
+    } catch {
+      setValidationErrors(["Failed to read the CSV file."]);
+      return;
+    }
+    const cleanedText = stripBlankLeadingRows(rawText);
+
+    const results = Papa.parse(cleanedText, {
       header: true,
       skipEmptyLines: true,
       transformHeader: (h) => h.trim(),
-      complete: (results) => {
-        const normMapping = {
-          name:        (mapping.name        || "").trim(),
-          date:        (mapping.date        || "").trim(),
-          description: (mapping.description || "").trim(),
-        };
-
-        if (!normMapping.name || !normMapping.date) {
-          setValidationErrors(["Please map at least the Name and Date columns."]);
-          return;
-        }
-
-        const mapped = applyColumnMapping(results.data, normMapping);
-        const { valid, errors } = validateCSVEvents(mapped);
-
-        if (valid.length === 0) {
-          setValidationErrors(errors.length > 0 ? errors : ["No valid timeline events found after mapping."]);
-          return;
-        }
-        if (errors.length > 0) setValidationErrors(errors);
-        else setValidationErrors([]);
-
-        setParsed(valid);
-        setShowMapper(false);
-        setFileReady(true);
-        setPreviewed(false);
-        setPreview(false);
-        setGenerated(false);
-        setSelectedTimeline(null);
-      },
     });
+
+    const normMapping = {
+      name:        (mapping.name        || "").trim(),
+      date:        (mapping.date        || "").trim(),
+      description: (mapping.description || "").trim(),
+    };
+
+    if (!normMapping.name || !normMapping.date) {
+      setValidationErrors(["Please map at least the Name and Date columns."]);
+      return;
+    }
+
+    const mapped = applyColumnMapping(results.data, normMapping);
+    const { valid, errors } = validateCSVEvents(mapped);
+
+    if (valid.length === 0) {
+      setValidationErrors(errors.length > 0 ? errors : ["No valid timeline events found after mapping."]);
+      return;
+    }
+    if (errors.length > 0) setValidationErrors(errors);
+    else setValidationErrors([]);
+
+    setParsed(valid);
+    setShowMapper(false);
+    setFileReady(true);
+    setPreviewed(false);
+    setPreview(false);
+    setGenerated(false);
+    setSelectedTimeline(null);
   };
 
   const handleSaveToDB = async () => {
@@ -441,7 +470,7 @@ export default function TimelineView() {
         ctx.fillStyle = accentGrad;
         ctx.fillRect(cardX, cardY, CARD_W, 3);
 
-        const dateStr = ev.date ? formatDate(ev.date, grouping, dateFormat) : "";
+        const dateStr = ev.date ? formatDate(ev.date, grouping, dateFormat, ev._datePrecision) : "";
         ctx.font = "600 11px Inter, sans-serif"; ctx.fillStyle = accentClr;
         ctx.textBaseline = "top";
         ctx.fillText(dateStr, cardX + 14, cardY + 14);
@@ -930,7 +959,7 @@ export default function TimelineView() {
                       {parsed.map((r, i) => (
                         <tr key={i} style={{ borderBottom: `1px solid ${th.border}` }}>
                           <td style={{ fontWeight: 600, color: th.text }}>{r.title}</td>
-                          <td style={{ whiteSpace: "nowrap", color: th.text }}>{new Date(r.date).toLocaleDateString()}</td>
+                          <td style={{ whiteSpace: "nowrap", color: th.text }}>{formatDateDisplay(r.date, r._datePrecision, dateFormat)}</td>
                           <td style={{ opacity: 0.72, minWidth: 140, color: th.text, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description}</td>
                         </tr>
                       ))}
