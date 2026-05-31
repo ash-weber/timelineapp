@@ -1,8 +1,88 @@
 export function parseDateSafe(d) {
   if (d instanceof Date) return d;
   const s = String(d).trim();
+  if (!s || s === "undefined" || s === "null") return new Date(NaN);
+
   if (s.includes("T")) return new Date(s);
-  return new Date(s + "T00:00:00");
+
+  const ddmmyyyy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00`);
+  }
+
+  const ddmmyyyySlash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyySlash) {
+    const [, day, month, year] = ddmmyyyySlash;
+    return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00`);
+  }
+
+  const ddmmyyyyDot = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (ddmmyyyyDot) {
+    const [, day, month, year] = ddmmyyyyDot;
+    return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00`);
+  }
+
+  const yyyymmdd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (yyyymmdd) {
+    const [, year, month, day] = yyyymmdd;
+    return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00`);
+  }
+
+  const yyyymmddSlash = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (yyyymmddSlash) {
+    const [, year, month, day] = yyyymmddSlash;
+    return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00`);
+  }
+
+  const mmddyyyy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mmddyyyy) {
+    const [, month, day, year] = mmddyyyy;
+    if (Number(day) > 12) {
+      return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00`);
+    }
+  }
+
+  const ddMonYYYY = s.match(/^(\d{1,2})[-\/\s]([A-Za-z]+)[-\/\s](\d{4})$/);
+  if (ddMonYYYY) {
+    const [, day, mon, year] = ddMonYYYY;
+    const parsed = new Date(`${mon} ${day}, ${year}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
+  const monDDYYYY = s.match(/^([A-Za-z]+)[-\/\s](\d{1,2})[-\/\s](\d{4})$/);
+  if (monDDYYYY) {
+    const [, mon, day, year] = monDDYYYY;
+    const parsed = new Date(`${mon} ${day}, ${year}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
+  const monYYYY = s.match(/^([A-Za-z]+)\s+(\d{4})$/);
+  if (monYYYY) {
+    const [, mon, year] = monYYYY;
+    const parsed = new Date(`${mon} 1, ${year}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
+  const yyyyMon = s.match(/^(\d{4})[-\/\s]([A-Za-z]+)$/);
+  if (yyyyMon) {
+    const [, year, mon] = yyyyMon;
+    const parsed = new Date(`${mon} 1, ${year}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
+  const yyyyOnly = s.match(/^(\d{4})$/);
+  if (yyyyOnly) {
+    return new Date(`${s}-01-01T00:00:00`);
+  }
+
+  if (/^\d{10,13}$/.test(s)) {
+    const ts = Number(s);
+    return new Date(s.length === 13 ? ts : ts * 1000);
+  }
+
+  const fallback = new Date(s);
+  return fallback;
 }
 
 export function parseCSV(text) {
@@ -21,12 +101,11 @@ export function parseCSV(text) {
         _eid: `csv_0_${rowIndex}`,
         title: obj.name || obj.title || "Untitled",
         date: parseDateSafe(obj.date),
-        description: obj.description || "No description provided.",
+        description: obj.description || obj.discription || obj.desc || obj.details || obj.detail || obj.note || obj.notes || "No description provided.",
       };
     });
   return parsed.sort((a, b) => parseDateSafe(a.date) - parseDateSafe(b.date));
 }
-
 
 export function applyColumnMapping(rawRows, mapping) {
   return rawRows
@@ -54,7 +133,7 @@ export function applyColumnMapping(rawRows, mapping) {
 export function formatDate(date, zoom, fmt) {
   const d = date instanceof Date ? date : parseDateSafe(date);
 
-  if (fmt === "YYYY")          return String(d.getFullYear());
+  if (fmt === "YYYY")        return String(d.getFullYear());
   if (fmt === "MON-YYYY")
     return d.toLocaleDateString("en-US", { year: "numeric", month: "short" });
   if (fmt === "DD-MON-YYYY") {
@@ -69,7 +148,6 @@ export function formatDate(date, zoom, fmt) {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
-
 export function groupEventsByYear(events) {
   const sorted = [...events].sort((a, b) => parseDateSafe(a.date) - parseDateSafe(b.date));
   const groups = {};
@@ -80,7 +158,6 @@ export function groupEventsByYear(events) {
   });
   return groups;
 }
-
 
 export function groupEventsByMonth(events) {
   const sorted = [...events].sort((a, b) => parseDateSafe(a.date) - parseDateSafe(b.date));
@@ -94,7 +171,6 @@ export function groupEventsByMonth(events) {
   return groups;
 }
 
-
 export function groupEventsByDay(events) {
   const sorted = [...events].sort((a, b) => parseDateSafe(a.date) - parseDateSafe(b.date));
   const groups = {};
@@ -106,7 +182,6 @@ export function groupEventsByDay(events) {
   });
   return groups;
 }
-
 
 export function validateCSVEvents(events) {
   const valid = [];

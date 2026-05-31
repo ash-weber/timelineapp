@@ -41,6 +41,24 @@ const DATE_FORMATS = [
 
 const ICON_GROUPS = ["All", ...Array.from(new Set(ALL_ICONS.map((i) => i.group)))];
 
+const NAME_KEYS = ["name", "title", "event", "event name", "label", "summary"];
+const DATE_KEYS = ["date", "time", "when", "timestamp", "day", "datetime"];
+const DESC_KEYS = [
+  "description", "discription", "desc", "details", "detail",
+  "note", "notes", "info", "body", "content", "text",
+];
+
+function detectCol(headers, exactKeys) {
+  // 1. exact match against known keys
+  const exact = headers.find((h) => exactKeys.includes(h.toLowerCase().trim()));
+  if (exact) return exact;
+  // 2. fuzzy: header contains any known key as a substring
+  return headers.find((h) =>
+    exactKeys.some((k) => h.toLowerCase().includes(k))
+  ) || null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function renderIconToCanvas(ctx, IconComponent, color, cx, cy, iconSize) {
   return new Promise((resolve) => {
     try {
@@ -95,9 +113,8 @@ export default function TimelineView() {
   const [showMapper, setShowMapper]     = useState(false);
   const [needsMapping, setNeedsMapping] = useState(false);
 
-  
-  const [fileReady, setFileReady]       = useState(false);
-  const [previewed, setPreviewed]       = useState(false);
+  const [fileReady, setFileReady]   = useState(false);
+  const [previewed, setPreviewed]   = useState(false);
 
   const [logoHovered, setLogoHovered]       = useState(false);
   const [logoPickerOpen, setLogoPickerOpen] = useState(false);
@@ -161,13 +178,9 @@ export default function TimelineView() {
         setCsvHeaders(headers);
         setCsvRawRows(results.data || []);
 
-        const NAME_KEYS  = ["name", "title", "event", "event name", "label", "summary"];
-        const DATE_KEYS  = ["date", "time", "when", "timestamp", "day", "datetime"];
-        const DESC_KEYS  = ["description", "desc", "details", "detail", "note", "notes", "info", "body", "content", "text"];
-
-        const nameCol = headers.find((h) => NAME_KEYS.includes(h.toLowerCase().trim()));
-        const dateCol = headers.find((h) => DATE_KEYS.includes(h.toLowerCase().trim()));
-        const descCol = headers.find((h) => DESC_KEYS.includes(h.toLowerCase().trim()));
+        const nameCol = detectCol(headers, NAME_KEYS);
+        const dateCol = detectCol(headers, DATE_KEYS);
+        const descCol = detectCol(headers, DESC_KEYS);
 
         const canAutoMap = !!(nameCol && dateCol);
 
@@ -809,8 +822,6 @@ export default function TimelineView() {
                   <FaTable size={13} /> Re-map Columns
                 </button>
               )}
-
-             
 
               {fileReady && !showMapper && !generated && !previewed && (
                 <button
