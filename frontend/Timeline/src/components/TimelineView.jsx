@@ -33,6 +33,10 @@ function applyColumnMapping(rows, mapping) {
   return _applyColumnMapping(cleanRows, mapping);
 }
 
+const gtagEvent = (eventName, params = {}) => {
+  window.gtag?.('event', eventName, params);
+};
+
 const DATE_FORMATS = [
   { value: "YYYY",        label: "YYYY" },
   { value: "MON-YYYY",    label: "MON-YYYY" },
@@ -174,6 +178,8 @@ export default function TimelineView() {
     setParsed([]);
     setShowMapper(false);
 
+    gtagEvent('csv_upload', { file_name: f.name });
+
     let rawText;
     try {
       rawText = await readFileText(f);
@@ -233,10 +239,14 @@ export default function TimelineView() {
       setShowMapper(false);
       setFileReady(true);
 
+      gtagEvent('csv_auto_mapped', { event_count: valid.length, file_name: f.name });
+
     } else {
       setNeedsMapping(true);
       setShowMapper(true);
       setFileReady(false);
+
+      gtagEvent('csv_mapping_required', { file_name: f.name });
     }
   };
 
@@ -284,6 +294,8 @@ export default function TimelineView() {
     setPreview(false);
     setGenerated(false);
     setSelectedTimeline(null);
+
+    gtagEvent('csv_mapping_confirmed', { event_count: valid.length });
   };
 
   const handleSaveToDB = async () => {
@@ -301,13 +313,26 @@ export default function TimelineView() {
         headers: { "Content-Type": "application/json", "x-device-mac": mac },
         body: JSON.stringify({ name: trimmedName, events: parsed }),
       });
-      if ((await res.json()).success) { alert("Timeline Saved!"); fetchSaved(); }
+      if ((await res.json()).success) {
+        alert("Timeline Saved!");
+        fetchSaved();
+        gtagEvent('save_timeline', { name: trimmedName, event_count: parsed.length });
+      }
     } catch { alert("Save failed"); }
   };
 
   const handleDownloadImage = async () => {
     if (!events || events.length === 0) return;
     setDownloading(true);
+
+    gtagEvent('export_image', {
+      event_count: events.length,
+      grouping,
+      view,
+      date_format: dateFormat,
+      timeline_name: selectedTimeline?.name || datasetName || "Timeline",
+    });
+
     try {
       const DPR          = 2;
       const OUTER_PAD    = 48;
@@ -521,6 +546,7 @@ export default function TimelineView() {
       fetchSaved();
       if (selectedTimeline?.id === id) setGenerated(false);
       setDropdownOpen(false);
+      gtagEvent('delete_timeline', { id });
     } catch (err) { console.error("Delete error:", err); }
   };
 
@@ -537,13 +563,17 @@ export default function TimelineView() {
       }));
       setSelectedTimeline({ ...item, events: formatted });
       setGenerated(true); setPreview(false); setDropdownOpen(false); setSidebarOpen(false);
+      gtagEvent('open_saved_dataset', { name: item.name, event_count: formatted.length });
       return formatted;
     } catch (err) { console.error("openTimeline error:", err); return null; }
   };
 
   const handleEditOpen = async (item) => {
     const fetchedEvents = await openTimeline(item);
-    if (fetchedEvents) setEditTimeline({ ...item, events: fetchedEvents });
+    if (fetchedEvents) {
+      setEditTimeline({ ...item, events: fetchedEvents });
+      gtagEvent('open_edit_modal', { name: item.name });
+    }
   };
 
   const filteredLogoIcons = ALL_ICONS.filter((ic) => {
@@ -673,18 +703,18 @@ export default function TimelineView() {
           </div>
 
           <div className="tl-header-actions">
-            <button onClick={() => setHelpOpen(true)} className="tl-btn"
+            <button onClick={() => { setHelpOpen(true); gtagEvent('open_help'); }} className="tl-btn"
               style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text, padding: "9px 14px", borderRadius: 11, fontSize: 12 }}>
               <FaQuestionCircle size={13} />
               <span className="tl-help-label">Help</span>
             </button>
-            <button onClick={() => setSidebarOpen(true)} className="tl-btn"
+            <button onClick={() => { setSidebarOpen(true); gtagEvent('open_datasets_sidebar'); }} className="tl-btn"
               style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", padding: "9px 14px", borderRadius: 11, fontSize: 12 }}>
               <FaDatabase size={12} />
               <span className="tl-datasets-label">Datasets</span>
               <span>({savedList.length})</span>
             </button>
-            <div className="tl-toggle" onClick={() => setDark(!dark)} style={{ background: dark ? "#2563eb" : "#cbd5e1" }}>
+            <div className="tl-toggle" onClick={() => { setDark(!dark); gtagEvent('toggle_theme', { theme: !dark ? 'dark' : 'light' }); }} style={{ background: dark ? "#2563eb" : "#cbd5e1" }}>
               <div className="tl-toggle-knob" style={{ left: dark ? 30 : 3 }}>
                 {dark ? <FaMoon color="#2563eb" size={10} /> : <FaSun color="#f59e0b" size={10} />}
               </div>
@@ -752,7 +782,7 @@ export default function TimelineView() {
                           const isSelected = key === logoIconKey;
                           return (
                             <button key={key} className="logo-icon-btn" title={label}
-                              onClick={() => { setLogoIconKey(key); setLogoPickerOpen(false); }}
+                              onClick={() => { setLogoIconKey(key); setLogoPickerOpen(false); gtagEvent('change_logo_icon', { icon: key }); }}
                               style={{ borderRadius: 14, background: isSelected ? `${ec}20` : (dark ? "#0f172a" : "#f8fafc"), border: isSelected ? `2px solid ${ec}` : `1.5px solid ${dark ? "#1e293b" : "#e2e8f0"}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "12px 4px 10px", position: "relative" }}
                               onMouseEnter={(e) => { if (!isSelected) { e.currentTarget.style.background = `${ec}15`; e.currentTarget.style.borderColor = ec; } }}
                               onMouseLeave={(e) => { if (!isSelected) { e.currentTarget.style.background = dark ? "#0f172a" : "#f8fafc"; e.currentTarget.style.borderColor = dark ? "#1e293b" : "#e2e8f0"; } }}
@@ -768,7 +798,7 @@ export default function TimelineView() {
                   }
                 </div>
                 <div style={{ padding: "12px 16px 16px", borderTop: `1px solid ${dark ? "#2d3748" : "#f1f5f9"}`, display: "flex", gap: 10 }}>
-                  <button onClick={() => { setLogoIconKey(null); setLogoPickerOpen(false); }}
+                  <button onClick={() => { setLogoIconKey(null); setLogoPickerOpen(false); gtagEvent('reset_logo_icon'); }}
                     style={{ flex: 1, padding: "11px", borderRadius: 12, background: dark ? "#334155" : "#f1f5f9", border: "none", color: dark ? "#e2e8f0" : "#334155", fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
                     <FaUndo size={11} /> Reset to default
                   </button>
@@ -859,6 +889,7 @@ export default function TimelineView() {
                     setPreviewed(true);
                     setGenerated(false);
                     setSelectedTimeline(null);
+                    gtagEvent('preview_table', { event_count: parsed.length });
                   }}
                   className="tl-btn"
                   style={{ background: "#059669" }}
@@ -933,7 +964,12 @@ export default function TimelineView() {
                   <span style={{ fontSize: 12, fontWeight: 500, color: dark ? "#64748b" : "#94a3b8" }}>({parsed.length} events)</span>
                 </h3>
                 <button
-                  onClick={() => { setGenerated(true); setPreview(false); setSelectedTimeline(null); }}
+                  onClick={() => {
+                    setGenerated(true);
+                    setPreview(false);
+                    setSelectedTimeline(null);
+                    gtagEvent('generate_timeline', { event_count: parsed.length });
+                  }}
                   className="tl-btn"
                   style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)" }}
                 >
@@ -983,14 +1019,14 @@ export default function TimelineView() {
 
                   <div className="tl-seg-group" style={{ background: dark ? "#1e293b" : "#f1f5f9" }}>
                     <button
-                      onClick={() => setGrouping("month")}
+                      onClick={() => { setGrouping("month"); gtagEvent('change_grouping', { grouping: 'month' }); }}
                       className="tl-seg-btn"
                       style={{ background: grouping !== "year" ? "#2563eb" : "transparent", color: grouping !== "year" ? "#fff" : th.text }}
                     >
                       <FaStream size={9} /> Timeline
                     </button>
                     <button
-                      onClick={() => setGrouping("year")}
+                      onClick={() => { setGrouping("year"); gtagEvent('change_grouping', { grouping: 'year' }); }}
                       className="tl-seg-btn"
                       style={{ background: grouping === "year" ? "#2563eb" : "transparent", color: grouping === "year" ? "#fff" : th.text }}
                     >
@@ -1000,7 +1036,7 @@ export default function TimelineView() {
 
                   <select
                     value={dateFormat}
-                    onChange={(e) => setDateFormat(e.target.value)}
+                    onChange={(e) => { setDateFormat(e.target.value); gtagEvent('change_date_format', { format: e.target.value }); }}
                     className="tl-fmt-select"
                     style={{ borderColor: th.border, background: th.surface, color: th.text }}
                   >
@@ -1011,14 +1047,14 @@ export default function TimelineView() {
 
                   <div className="tl-seg-group" style={{ background: dark ? "#1e293b" : "#f1f5f9" }}>
                     <button
-                      onClick={() => setView("horizontal")}
+                      onClick={() => { setView("horizontal"); gtagEvent('change_view', { view: 'horizontal' }); }}
                       className="tl-seg-btn"
                       style={{ background: view === "horizontal" ? "#2563eb" : "transparent", color: view === "horizontal" ? "#fff" : th.text }}
                     >
                       <FaArrowsAltH size={9} /> Horiz
                     </button>
                     <button
-                      onClick={() => setView("vertical")}
+                      onClick={() => { setView("vertical"); gtagEvent('change_view', { view: 'vertical' }); }}
                       className="tl-seg-btn"
                       style={{ background: view === "vertical" ? "#2563eb" : "transparent", color: view === "vertical" ? "#fff" : th.text }}
                     >
@@ -1079,8 +1115,8 @@ export default function TimelineView() {
                   dark={dark}
                   yearGroups={yearGroups}
                   dateFormat={dateFormat}
-                  onSelectEvent={setViewEvent}
-                  onSelectYear={setViewYearGroup}
+                  onSelectEvent={(ev) => { setViewEvent(ev); gtagEvent('view_event_details', { title: ev.title }); }}
+                  onSelectYear={(yg) => { setViewYearGroup(yg); gtagEvent('view_year_group', { year: yg.year, event_count: yg.events?.length }); }}
                 />
               </div>
             </div>
@@ -1104,7 +1140,7 @@ export default function TimelineView() {
               dark={dark}
               grouping={grouping}
               onClose={() => setViewYearGroup(null)}
-              onSelectEvent={(ev) => setViewEvent(ev)}
+              onSelectEvent={(ev) => { setViewEvent(ev); gtagEvent('view_event_details_from_year', { title: ev.title, year: viewYearGroup.year }); }}
             />
           )}
           {editTimeline && (
@@ -1116,6 +1152,7 @@ export default function TimelineView() {
                 setSelectedTimeline(updated);
                 fetchSaved();
                 setEditTimeline(null);
+                gtagEvent('edit_timeline_saved', { name: updated.name });
               }}
             />
           )}
