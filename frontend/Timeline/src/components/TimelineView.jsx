@@ -41,7 +41,7 @@ const gtagEvent = (eventName, params = {}) => {
 const DATE_FORMATS = [
   { value: "YYYY",        label: "YYYY" },
   { value: "MM-YYYY",     label: "MM-YYYY" },
-  { value: "DD-MM-YYYY",  label: "DD-MM-YYYY" },
+  { value: "DD-MON-YYYY", label: "DD-MON-YYYY" },
 ];
 
 const EXPORT_FORMATS = [
