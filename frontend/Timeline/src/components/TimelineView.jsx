@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   FaMoon, FaSun, FaStream, FaUpload, FaSave,
@@ -6,6 +6,7 @@ import {
   FaCalendarAlt,
   FaDownload, FaSpinner, FaDatabase, FaTimes, FaQuestionCircle,
   FaPencilAlt, FaSearch, FaUndo, FaExclamationTriangle,
+  FaFilePdf, FaFileImage, FaChevronDown,
 } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
 import Papa from "papaparse";
@@ -39,8 +40,14 @@ const gtagEvent = (eventName, params = {}) => {
 
 const DATE_FORMATS = [
   { value: "YYYY",        label: "YYYY" },
-  { value: "MON-YYYY",    label: "MON-YYYY" },
-  { value: "DD-MON-YYYY", label: "DD-MON-YYYY" },
+  { value: "MM-YYYY",     label: "MM-YYYY" },
+  { value: "DD-MM-YYYY",  label: "DD-MM-YYYY" },
+];
+
+const EXPORT_FORMATS = [
+  { value: "png",  label: "PNG",  icon: FaFileImage },
+  { value: "jpeg", label: "JPEG", icon: FaFileImage },
+  { value: "pdf",  label: "PDF",  icon: FaFilePdf   },
 ];
 
 const ICON_GROUPS = ["All", ...Array.from(new Set(ALL_ICONS.map((i) => i.group)))];
@@ -104,7 +111,7 @@ export default function TimelineView() {
   const [generated, setGenerated]         = useState(false);
   const [grouping, setGrouping]           = useState("month");
   const [view, setView]                   = useState("vertical");
-  const [dateFormat, setDateFormat]       = useState("MON-YYYY");
+  const [dateFormat, setDateFormat]       = useState("DD-MM-YYYY");
   const [savedList, setSavedList]         = useState([]);
   const [selectedTimeline, setSelectedTimeline] = useState(null);
   const [editTimeline, setEditTimeline]   = useState(null);
@@ -130,15 +137,47 @@ export default function TimelineView() {
   const [logoSearch, setLogoSearch]         = useState("");
   const [logoGroup, setLogoGroup]           = useState("All");
 
+  const [exportFormat, setExportFormat]         = useState("png");
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef(null);
+
+  const [dateFormatDropdownOpen, setDateFormatDropdownOpen] = useState(false);
+  const dateFormatDropdownRef = useRef(null);
+
+  const [searchQuery, setSearchQuery] = useState("");
+
   const fileRef         = useRef();
   const timelineRef     = useRef();
   const timelineBodyRef = useRef();
+
+  const saveActionRef = useRef(() => {});
+  const exportActionRef = useRef(() => {});
 
   const th = dark
     ? { bg: "#0a0f1e", surface: "#111827", text: "#fff", border: "#334155" }
     : { bg: "#f1f5f9", surface: "#fff", text: "#111827", border: "#e2e8f0" };
 
   useEffect(() => { fetchSaved(); }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target)) {
+        setExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (dateFormatDropdownRef.current && !dateFormatDropdownRef.current.contains(e.target)) {
+        setDateFormatDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const fetchSaved = async () => {
     try {
@@ -321,217 +360,351 @@ export default function TimelineView() {
     } catch { alert("Save failed"); }
   };
 
+  
+  const events = selectedTimeline ? selectedTimeline.events : parsed;
+
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return events;
+    const query = searchQuery.toLowerCase().trim();
+    return events.filter((ev) =>
+      (ev.title && ev.title.toLowerCase().includes(query)) ||
+      (ev.name && ev.name.toLowerCase().includes(query)) ||
+      (ev.description && ev.description.toLowerCase().includes(query))
+    );
+  }, [events, searchQuery]);
+
+  const filteredYearGroups = useMemo(() => groupEventsByYear(filteredEvents), [filteredEvents]);
+
+  
   const handleDownloadImage = async () => {
-    if (!events || events.length === 0) return;
+    if (!filteredEvents || filteredEvents.length === 0) return;
     setDownloading(true);
 
+    const timelineName = selectedTimeline?.name || datasetName || "Timeline";
+
     gtagEvent('export_image', {
-      event_count: events.length,
+      event_count: filteredEvents.length,
+      format: exportFormat,
       grouping,
       view,
       date_format: dateFormat,
-      timeline_name: selectedTimeline?.name || datasetName || "Timeline",
+      timeline_name: timelineName,
     });
 
     try {
-      const DPR          = 2;
-      const OUTER_PAD    = 48;
-      const COL_GAP      = 40;
-      const CARD_W       = 340;
-      const CARD_H_BASE  = 108;
-      const CARD_GAP     = 14;
-      const DOT_R        = 14;
-      const DOT_OFFSET   = DOT_R + 8;
-      const CARD_OFFSET  = DOT_OFFSET + DOT_R + 16;
-      const COL_W        = CARD_OFFSET + CARD_W;
-      const TITLE_H      = 80;
-      const FOOTER_H     = 36;
-      const MAX_COL_H    = 2400;
-      const timelineName = selectedTimeline?.name || datasetName || "Timeline";
+      const buildTimelineCanvas = async () => {
+        const DPR          = 2;
+        const OUTER_PAD    = 48;
+        const COL_GAP      = 40;
+        const CARD_W       = 340;
+        const CARD_H_BASE  = 108;
+        const CARD_GAP     = 14;
+        const DOT_R        = 14;
+        const DOT_OFFSET   = DOT_R + 8;
+        const CARD_OFFSET  = DOT_OFFSET + DOT_R + 16;
+        const COL_W        = CARD_OFFSET + CARD_W;
+        const TITLE_H      = 80;
+        const FOOTER_H     = 36;
+        const MAX_COL_H    = 2400;
 
-      const tempCanvas  = document.createElement("canvas");
-      const tempCtx     = tempCanvas.getContext("2d");
-      tempCtx.font      = "400 12px Inter, sans-serif";
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx    = tempCanvas.getContext("2d");
+        tempCtx.font     = "400 12px Inter, sans-serif";
 
-      const cardHeights = events.map((ev) => {
-        const words = (ev.description || "").split(" ");
-        let lines = 1, line = "";
-        for (const word of words) {
-          const test = line ? line + " " + word : word;
-          if (tempCtx.measureText(test).width > CARD_W - 28 && line) { lines++; line = word; }
-          else { line = test; }
-        }
-        const clampedLines = Math.min(lines, 3);
-        const descHeight = clampedLines * 16;
-        return Math.max(CARD_H_BASE, 14 + 19 + 17 + descHeight + 14);
-      });
+        const cardHeights = filteredEvents.map((ev) => {
+          const words = (ev.description || "").split(" ");
+          let lines = 1, line = "";
+          for (const word of words) {
+            const test = line ? line + " " + word : word;
+            if (tempCtx.measureText(test).width > CARD_W - 28 && line) { lines++; line = word; }
+            else { line = test; }
+          }
+          const clampedLines = Math.min(lines, 3);
+          return Math.max(CARD_H_BASE, 14 + 19 + 17 + clampedLines * 16 + 14);
+        });
 
-      const maxCardH     = Math.max(...cardHeights);
-      const rowH         = maxCardH + CARD_GAP;
-      const ROWS_PER_COL = Math.max(1, Math.floor(MAX_COL_H / rowH));
-      const NUM_COLS     = Math.ceil(events.length / ROWS_PER_COL);
-      const tallestCol   = Math.min(events.length, ROWS_PER_COL);
-      const totalW       = OUTER_PAD + NUM_COLS * COL_W + (NUM_COLS - 1) * COL_GAP + OUTER_PAD;
-      const totalH       = OUTER_PAD + TITLE_H + tallestCol * rowH + FOOTER_H + OUTER_PAD;
+        const rowH         = Math.max(...cardHeights) + CARD_GAP;
+        const ROWS_PER_COL = Math.max(1, Math.floor(MAX_COL_H / rowH));
+        const NUM_COLS     = Math.ceil(filteredEvents.length / ROWS_PER_COL);
+        const tallestCol   = Math.min(filteredEvents.length, ROWS_PER_COL);
+        const totalW       = OUTER_PAD + NUM_COLS * COL_W + (NUM_COLS - 1) * COL_GAP + OUTER_PAD;
+        const totalH       = OUTER_PAD + TITLE_H + tallestCol * rowH + FOOTER_H + OUTER_PAD;
 
-      const canvas  = document.createElement("canvas");
-      canvas.width  = totalW * DPR;
-      canvas.height = totalH * DPR;
-      const ctx     = canvas.getContext("2d");
-      ctx.scale(DPR, DPR);
+        const canvas  = document.createElement("canvas");
+        canvas.width  = totalW * DPR;
+        canvas.height = totalH * DPR;
+        const ctx     = canvas.getContext("2d");
+        ctx.scale(DPR, DPR);
 
-      const bgColor   = dark ? "#0f172a" : "#f8fafc";
-      const textColor = dark ? "#f1f5f9" : "#111827";
-      const subColor  = dark ? "#94a3b8" : "#64748b";
-      const cardBg    = dark ? "#1e293b" : "#ffffff";
-      const cardBdr   = dark ? "#334155" : "#e2e8f0";
-      const accentClr = "#2563eb";
+        const bgColor   = dark ? "#0f172a" : "#f8fafc";
+        const textColor = dark ? "#f1f5f9" : "#111827";
+        const subColor  = dark ? "#94a3b8" : "#64748b";
+        const cardBg    = dark ? "#1e293b" : "#ffffff";
+        const cardBdr   = dark ? "#334155" : "#e2e8f0";
+        const accentClr = "#2563eb";
 
-      const trunc = (text, maxW) => {
-        if (ctx.measureText(text).width <= maxW) return text;
-        let lo = 0, hi = text.length;
-        while (lo < hi) {
-          const mid = (lo + hi + 1) >> 1;
-          ctx.measureText(text.slice(0, mid) + "…").width <= maxW ? (lo = mid) : (hi = mid - 1);
-        }
-        return text.slice(0, lo) + "…";
-      };
+        const trunc = (text, maxW) => {
+          if (ctx.measureText(text).width <= maxW) return text;
+          let lo = 0, hi = text.length;
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            ctx.measureText(text.slice(0, mid) + "…").width <= maxW ? (lo = mid) : (hi = mid - 1);
+          }
+          return text.slice(0, lo) + "…";
+        };
 
-      const roundRect = (x, y, w, h, r) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-      };
-
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, totalW, totalH);
-
-      for (let c = 0; c < NUM_COLS; c++) {
-        const colX = OUTER_PAD + c * (COL_W + COL_GAP);
-        ctx.fillStyle = dark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)";
-        roundRect(colX - 8, OUTER_PAD + TITLE_H - 8, COL_W + 16, tallestCol * rowH + 16, 16);
-        ctx.fill();
-      }
-
-      const titleGrad = ctx.createLinearGradient(OUTER_PAD, 0, OUTER_PAD + 300, 0);
-      titleGrad.addColorStop(0, "#2563eb");
-      titleGrad.addColorStop(1, "#7c3aed");
-      roundRect(OUTER_PAD, OUTER_PAD, 10, 44, 3);
-      ctx.fillStyle = titleGrad;
-      ctx.fill();
-      ctx.font = "700 26px Inter, sans-serif";
-      ctx.fillStyle = textColor;
-      ctx.textBaseline = "middle";
-      ctx.fillText(timelineName, OUTER_PAD + 22, OUTER_PAD + 22);
-      ctx.font = "400 13px Inter, sans-serif";
-      ctx.fillStyle = subColor;
-      ctx.textBaseline = "top";
-      ctx.fillText(
-        `${events.length} events · ${grouping} grouping · ${dateFormat} · ${view} · ${NUM_COLS} column${NUM_COLS > 1 ? "s" : ""}`,
-        OUTER_PAD + 22, OUTER_PAD + 50
-      );
-
-      if (NUM_COLS > 1) {
-        for (let c = 0; c < NUM_COLS; c++) {
-          const colX  = OUTER_PAD + c * (COL_W + COL_GAP);
-          const start = c * ROWS_PER_COL + 1;
-          const end   = Math.min((c + 1) * ROWS_PER_COL, events.length);
-          ctx.font = "600 11px Inter, sans-serif";
-          ctx.fillStyle = dark ? "#475569" : "#94a3b8";
-          ctx.textBaseline = "top";
-          ctx.fillText(`Events ${start}–${end}`, colX + DOT_OFFSET + DOT_R + 16, OUTER_PAD + TITLE_H - 20);
-        }
-      }
-
-      for (let i = 0; i < events.length; i++) {
-        const ev     = events[i];
-        const CARD_H = cardHeights[i];
-        const col    = Math.floor(i / ROWS_PER_COL);
-        const row    = i % ROWS_PER_COL;
-        const colX   = OUTER_PAD + col * (COL_W + COL_GAP);
-        const dotX   = colX + DOT_OFFSET;
-        const cardX  = colX + CARD_OFFSET;
-        const cardY  = OUTER_PAD + TITLE_H + row * rowH;
-        const dotY   = cardY + CARD_H / 2;
-
-        if (
-          row < ROWS_PER_COL - 1 && i < events.length - 1 &&
-          Math.floor((i + 1) / ROWS_PER_COL) === col
-        ) {
-          const nextDotY = dotY + rowH;
-          const lineGrad = ctx.createLinearGradient(dotX, dotY, dotX, nextDotY);
-          lineGrad.addColorStop(0, "#2563eb66");
-          lineGrad.addColorStop(1, "#7c3aed33");
-          ctx.strokeStyle = lineGrad;
-          ctx.lineWidth   = 2.5;
+        const roundRect = (x, y, w, h, r) => {
           ctx.beginPath();
-          ctx.moveTo(dotX, dotY + DOT_R + 2);
-          ctx.lineTo(dotX, nextDotY - DOT_R - 2);
-          ctx.stroke();
+          ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        };
+
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, totalW, totalH);
+
+        for (let c = 0; c < NUM_COLS; c++) {
+          const colX = OUTER_PAD + c * (COL_W + COL_GAP);
+          ctx.fillStyle = dark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)";
+          roundRect(colX - 8, OUTER_PAD + TITLE_H - 8, COL_W + 16, tallestCol * rowH + 16, 16);
+          ctx.fill();
         }
 
-        const { Icon: EvIcon, color: evColor } = getEventIcon(ev);
-        ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R + 5, 0, Math.PI * 2); ctx.fillStyle = `${evColor}20`; ctx.fill();
-        ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.fillStyle = `${evColor}33`; ctx.fill();
-        ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.strokeStyle = `${evColor}88`; ctx.lineWidth = 1.5; ctx.stroke();
-        await renderIconToCanvas(ctx, EvIcon, evColor, dotX, dotY, 16);
-
-        ctx.shadowColor   = dark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.08)";
-        ctx.shadowBlur    = 10; ctx.shadowOffsetY = 3;
-        roundRect(cardX, cardY, CARD_W, CARD_H, 12);
-        ctx.fillStyle = cardBg; ctx.fill();
-        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-        ctx.strokeStyle = cardBdr; ctx.lineWidth = 1; ctx.stroke();
-
-        const accentGrad = ctx.createLinearGradient(cardX, 0, cardX + CARD_W, 0);
-        accentGrad.addColorStop(0, evColor); accentGrad.addColorStop(1, "#7c3aed");
-        ctx.fillStyle = accentGrad;
-        ctx.fillRect(cardX, cardY, CARD_W, 3);
-
-        const dateStr = ev.date ? formatDate(ev.date, grouping, dateFormat, ev._datePrecision) : "";
-        ctx.font = "600 11px Inter, sans-serif"; ctx.fillStyle = accentClr;
+        const titleGrad = ctx.createLinearGradient(OUTER_PAD, 0, OUTER_PAD + 300, 0);
+        titleGrad.addColorStop(0, "#2563eb");
+        titleGrad.addColorStop(1, "#7c3aed");
+        roundRect(OUTER_PAD, OUTER_PAD, 10, 44, 3);
+        ctx.fillStyle = titleGrad; ctx.fill();
+        ctx.font = "700 26px Inter, sans-serif"; ctx.fillStyle = textColor;
+        ctx.textBaseline = "middle";
+        ctx.fillText(timelineName, OUTER_PAD + 22, OUTER_PAD + 22);
+        ctx.font = "400 13px Inter, sans-serif"; ctx.fillStyle = subColor;
         ctx.textBaseline = "top";
-        ctx.fillText(dateStr, cardX + 14, cardY + 14);
+        ctx.fillText(
+          `${filteredEvents.length} events · ${grouping} grouping · ${dateFormat} · ${view} · ${NUM_COLS} column${NUM_COLS > 1 ? "s" : ""}`,
+          OUTER_PAD + 22, OUTER_PAD + 50
+        );
 
-        const title = ev.title || ev.name || "Untitled";
-        ctx.font = "700 14px Inter, sans-serif"; ctx.fillStyle = textColor;
-        ctx.fillText(trunc(title, CARD_W - 28), cardX + 14, cardY + 33);
-
-        ctx.font = "400 12px Inter, sans-serif"; ctx.fillStyle = subColor;
-        const words = (ev.description || "").split(" ");
-        let line = "", descY = cardY + 56, lineCount = 0;
-        for (const word of words) {
-          const test = line ? line + " " + word : word;
-          if (ctx.measureText(test).width > CARD_W - 28 && line) {
-            if (lineCount >= 2) { ctx.fillText(line + "…", cardX + 14, descY); break; }
-            ctx.fillText(line, cardX + 14, descY);
-            line = word; descY += 16; lineCount++;
-            if (descY > cardY + CARD_H - 10) { ctx.fillText(line + "…", cardX + 14, descY - 16); break; }
-          } else { line = test; }
+        if (NUM_COLS > 1) {
+          for (let c = 0; c < NUM_COLS; c++) {
+            const colX  = OUTER_PAD + c * (COL_W + COL_GAP);
+            const start = c * ROWS_PER_COL + 1;
+            const end   = Math.min((c + 1) * ROWS_PER_COL, filteredEvents.length);
+            ctx.font = "600 11px Inter, sans-serif";
+            ctx.fillStyle = dark ? "#475569" : "#94a3b8";
+            ctx.textBaseline = "top";
+            ctx.fillText(`Events ${start}–${end}`, colX + DOT_OFFSET + DOT_R + 16, OUTER_PAD + TITLE_H - 20);
+          }
         }
-        if (line && descY <= cardY + CARD_H - 10 && lineCount < 3) ctx.fillText(line, cardX + 14, descY);
+
+        for (let i = 0; i < filteredEvents.length; i++) {
+          const ev     = filteredEvents[i];
+          const CARD_H = cardHeights[i];
+          const col    = Math.floor(i / ROWS_PER_COL);
+          const row    = i % ROWS_PER_COL;
+          const colX   = OUTER_PAD + col * (COL_W + COL_GAP);
+          const dotX   = colX + DOT_OFFSET;
+          const cardX  = colX + CARD_OFFSET;
+          const cardY  = OUTER_PAD + TITLE_H + row * rowH;
+          const dotY   = cardY + CARD_H / 2;
+
+          if (row < ROWS_PER_COL - 1 && i < filteredEvents.length - 1 && Math.floor((i + 1) / ROWS_PER_COL) === col) {
+            const nextDotY = dotY + rowH;
+            const lineGrad = ctx.createLinearGradient(dotX, dotY, dotX, nextDotY);
+            lineGrad.addColorStop(0, "#2563eb66");
+            lineGrad.addColorStop(1, "#7c3aed33");
+            ctx.strokeStyle = lineGrad; ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(dotX, dotY + DOT_R + 2);
+            ctx.lineTo(dotX, nextDotY - DOT_R - 2);
+            ctx.stroke();
+          }
+
+          const { Icon: EvIcon, color: evColor } = getEventIcon(ev);
+          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R + 5, 0, Math.PI * 2); ctx.fillStyle = `${evColor}20`; ctx.fill();
+          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.fillStyle = `${evColor}33`; ctx.fill();
+          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.strokeStyle = `${evColor}88`; ctx.lineWidth = 1.5; ctx.stroke();
+          await renderIconToCanvas(ctx, EvIcon, evColor, dotX, dotY, 16);
+
+          ctx.shadowColor = dark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.08)";
+          ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
+          roundRect(cardX, cardY, CARD_W, CARD_H, 12);
+          ctx.fillStyle = cardBg; ctx.fill();
+          ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+          ctx.strokeStyle = cardBdr; ctx.lineWidth = 1; ctx.stroke();
+
+          const accentGrad = ctx.createLinearGradient(cardX, 0, cardX + CARD_W, 0);
+          accentGrad.addColorStop(0, evColor); accentGrad.addColorStop(1, "#7c3aed");
+          ctx.fillStyle = accentGrad;
+          ctx.fillRect(cardX, cardY, CARD_W, 3);
+
+          const dateStr = ev.date ? formatDate(ev.date, grouping, dateFormat, ev._datePrecision) : "";
+          ctx.font = "600 11px Inter, sans-serif"; ctx.fillStyle = accentClr;
+          ctx.textBaseline = "top";
+          ctx.fillText(dateStr, cardX + 14, cardY + 14);
+
+          ctx.font = "700 14px Inter, sans-serif"; ctx.fillStyle = textColor;
+          ctx.fillText(trunc(ev.title || ev.name || "Untitled", CARD_W - 28), cardX + 14, cardY + 33);
+
+          ctx.font = "400 12px Inter, sans-serif"; ctx.fillStyle = subColor;
+          const words = (ev.description || "").split(" ");
+          let line = "", descY = cardY + 56, lineCount = 0;
+          for (const word of words) {
+            const test = line ? line + " " + word : word;
+            if (ctx.measureText(test).width > CARD_W - 28 && line) {
+              if (lineCount >= 2) { ctx.fillText(line + "…", cardX + 14, descY); break; }
+              ctx.fillText(line, cardX + 14, descY);
+              line = word; descY += 16; lineCount++;
+              if (descY > cardY + CARD_H - 10) { ctx.fillText(line + "…", cardX + 14, descY - 16); break; }
+            } else { line = test; }
+          }
+          if (line && descY <= cardY + CARD_H - 10 && lineCount < 3) ctx.fillText(line, cardX + 14, descY);
+        }
+
+        ctx.fillStyle = dark ? "#1e293b" : "#e2e8f0";
+        ctx.fillRect(0, totalH - FOOTER_H, totalW, FOOTER_H);
+        ctx.font = "400 11px Inter, sans-serif"; ctx.fillStyle = dark ? "#475569" : "#94a3b8";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(
+          `Timeline View · ${timelineName} · ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
+          OUTER_PAD, totalH - 12
+        );
+
+        return canvas;
+      };
+
+      if (exportFormat === "pdf") {
+        const { default: jsPDF } = await import("jspdf");
+
+        const DPR         = 2;
+        const OUTER_PAD   = 48;
+        const CARD_W      = 340;
+        const CARD_H_BASE = 108;
+        const CARD_GAP    = 14;
+        const DOT_R       = 14;
+        const DOT_OFFSET  = DOT_R + 8;
+        const CARD_OFFSET = DOT_OFFSET + DOT_R + 16;
+        const COL_W       = CARD_OFFSET + CARD_W;
+        const TITLE_H     = 80;
+        const FOOTER_H    = 36;
+        const MAX_COL_H   = 2400;
+
+        const tempC = document.createElement("canvas");
+        const tempX = tempC.getContext("2d");
+        tempX.font  = "400 12px Inter, sans-serif";
+        const cardHeightsPdf = filteredEvents.map((ev) => {
+          const words = (ev.description || "").split(" ");
+          let lines = 1, line = "";
+          for (const word of words) {
+            const test = line ? line + " " + word : word;
+            if (tempX.measureText(test).width > CARD_W - 28 && line) { lines++; line = word; }
+            else { line = test; }
+          }
+          return Math.max(CARD_H_BASE, 14 + 19 + 17 + Math.min(lines, 3) * 16 + 14);
+        });
+
+        const rowH         = Math.max(...cardHeightsPdf) + CARD_GAP;
+        const ROWS_PER_COL = Math.max(1, Math.floor(MAX_COL_H / rowH));
+
+        const rowYStarts = filteredEvents.map((_, i) => {
+          const row = i % ROWS_PER_COL;
+          return OUTER_PAD + TITLE_H + row * rowH;
+        });
+
+        const canvas = await buildTimelineCanvas();
+        const imgW   = canvas.width;
+        const imgH   = canvas.height;
+
+        const isLandscape = imgW / imgH > 1.3;
+        const pdf = new jsPDF({
+          orientation: isLandscape ? "landscape" : "portrait",
+          unit: "pt",
+          format: "a4",
+        });
+
+        const pageW   = pdf.internal.pageSize.getWidth();
+        const pageH   = pdf.internal.pageSize.getHeight();
+        const MARGIN  = 32;
+        const HDR_H   = 24;
+        const usableW = pageW - MARGIN * 2;
+        const usableH = pageH - MARGIN * 2 - HDR_H;
+
+        const pxToPoint = usableW / (imgW / DPR);
+
+        const pageStartsLogical = [0];
+        let pageBottomLogical = usableH / pxToPoint;
+
+        for (let i = 0; i < rowYStarts.length; i++) {
+          const rowBottom = rowYStarts[i] + rowH;
+          if (rowBottom > pageBottomLogical) {
+            const snapY = rowYStarts[i];
+            pageStartsLogical.push(snapY);
+            pageBottomLogical = snapY + usableH / pxToPoint;
+          }
+        }
+        pageStartsLogical.push(imgH / DPR);
+
+        const pageCount = pageStartsLogical.length - 1;
+
+        const drawHeader = (pageNum) => {
+          pdf.setFillColor(15, 23, 42);
+          pdf.rect(0, 0, pageW, HDR_H + MARGIN * 0.5, "F");
+          pdf.setDrawColor(37, 99, 235);
+          pdf.setLineWidth(1.5);
+          pdf.line(0, HDR_H + MARGIN * 0.5, pageW, HDR_H + MARGIN * 0.5);
+          pdf.setDrawColor(124, 58, 237);
+          pdf.setLineWidth(1.5);
+          pdf.line(pageW * 0.4, HDR_H + MARGIN * 0.5, pageW * 0.6, HDR_H + MARGIN * 0.5);
+          pdf.setFontSize(8);
+          pdf.setTextColor(148, 163, 184);
+          pdf.text(timelineName, MARGIN, HDR_H);
+          pdf.text(`${filteredEvents.length} events · ${dateFormat}`, pageW / 2, HDR_H, { align: "center" });
+          pdf.text(`Page ${pageNum} / ${pageCount}`, pageW - MARGIN, HDR_H, { align: "right" });
+        };
+
+        for (let p = 0; p < pageCount; p++) {
+          if (p > 0) pdf.addPage();
+          drawHeader(p + 1);
+
+          const srcYLogical = pageStartsLogical[p];
+          const srcHLogical = pageStartsLogical[p + 1] - srcYLogical;
+          if (srcHLogical <= 0) continue;
+
+          const srcY = Math.round(srcYLogical * DPR);
+          const srcH = Math.min(Math.round(srcHLogical * DPR), imgH - srcY);
+          if (srcH <= 0) continue;
+
+          const slice    = document.createElement("canvas");
+          slice.width    = imgW;
+          slice.height   = srcH;
+          const sCtx     = slice.getContext("2d");
+          sCtx.fillStyle = dark ? "#0f172a" : "#f8fafc";
+          sCtx.fillRect(0, 0, imgW, srcH);
+          sCtx.drawImage(canvas, 0, srcY, imgW, srcH, 0, 0, imgW, srcH);
+
+          const imgData = slice.toDataURL("image/jpeg", 0.97);
+          const sliceH  = srcHLogical * pxToPoint;
+
+          pdf.addImage(imgData, "JPEG", MARGIN, MARGIN + HDR_H, usableW, sliceH, `slice_${p}`, "FAST");
+        }
+
+        pdf.save(`${timelineName.replace(/\s+/g, "_")}.pdf`);
+        return;
       }
 
-      ctx.fillStyle = dark ? "#1e293b" : "#e2e8f0";
-      ctx.fillRect(0, totalH - FOOTER_H, totalW, FOOTER_H);
-      ctx.font = "400 11px Inter, sans-serif"; ctx.fillStyle = dark ? "#475569" : "#94a3b8";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(
-        `Timeline View · ${timelineName} · ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
-        OUTER_PAD, totalH - 12
-      );
-
+      const canvas  = await buildTimelineCanvas();
+      const isJpeg  = exportFormat === "jpeg";
       const link    = document.createElement("a");
-      link.download = `${timelineName.replace(/\s+/g, "_")}.png`;
-      link.href     = canvas.toDataURL("image/png");
+      link.download = `${timelineName.replace(/\s+/g, "_")}.${isJpeg ? "jpg" : "png"}`;
+      link.href     = canvas.toDataURL(isJpeg ? "image/jpeg" : "image/png", isJpeg ? 0.92 : 1);
       link.click();
+
     } catch (err) {
       console.error("Export error:", err);
       alert("Export failed. See console for details.");
@@ -590,8 +763,35 @@ export default function TimelineView() {
     setLogoSearch(""); setLogoGroup("All"); setLogoPickerOpen(true);
   };
 
-  const events     = selectedTimeline ? selectedTimeline.events : parsed;
-  const yearGroups = groupEventsByYear(events);
+  const currentFmt = EXPORT_FORMATS.find((f) => f.value === exportFormat) || EXPORT_FORMATS[0];
+
+  useEffect(() => {
+    saveActionRef.current = handleSaveToDB;
+  }, [handleSaveToDB]);
+
+  useEffect(() => {
+    exportActionRef.current = handleDownloadImage;
+  }, [handleDownloadImage]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (fileReady && !showMapper && !selectedTimeline) {
+          saveActionRef.current();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (generated && filteredEvents.length > 0 && !downloading) {
+          exportActionRef.current();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fileReady, showMapper, selectedTimeline, generated, filteredEvents.length, downloading]);
 
   if (helpOpen) {
     return (
@@ -640,15 +840,17 @@ export default function TimelineView() {
           .logo-group-scroll::-webkit-scrollbar { display: none; }
           .logo-icon-btn { transition: transform 0.12s, background 0.12s, border-color 0.12s; cursor: pointer; }
           .logo-icon-btn:hover { transform: scale(1.08); }
-          .tl-fmt-select { padding: 7px 10px; border-radius: 9px; border: 1px solid; font-weight: 600; font-size: 11px; cursor: pointer; outline: none; }
           .tl-errors { border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
           .tl-error-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+          .export-dropdown { position: absolute; top: "calc(100% + 6px)"; right: 0; border-radius: 12px; overflow: hidden; min-width: 130px; z-index: 200; }
+          .export-dropdown-item { display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; width: 100%; text-align: left; transition: background 0.15s; }
           @media (max-width: 640px) {
             .tl-header { padding: 0 14px; height: 58px; }
             .tl-logo-icon { width: 34px !important; height: 34px !important; border-radius: 10px !important; }
             .tl-logo h2 { font-size: 0.95rem; }
             .tl-datasets-label { display: none; }
             .tl-help-label { display: none; }
+            .tl-shortcut-hint { display: none !important; }
             .tl-main { padding: 12px 12px 40px; }
             .tl-card { padding: 16px 14px; border-radius: 15px; margin-bottom: 14px; }
             .tl-card h2 { font-size: 1.05rem !important; margin-bottom: 14px !important; }
@@ -663,7 +865,6 @@ export default function TimelineView() {
             .tl-seg-btn { flex-shrink: 0; }
             .tl-sidebar { width: 100% !important; border-right: none !important; }
             .logo-picker-panel { width: 96vw !important; max-height: 90vh !important; }
-            .tl-fmt-select { width: 100%; }
           }
           @media (min-width: 641px) and (max-width: 1024px) {
             .tl-header { padding: 0 22px; height: 66px; }
@@ -866,66 +1067,35 @@ export default function TimelineView() {
                   )}
                   {needsMapping && !showMapper && !fileReady && (
                     <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#fef3c7", color: "#d97706", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
-                      ⚠ Mapping required
+                       Mapping required
                     </span>
                   )}
                 </span>
               )}
 
               {fileReady && !showMapper && needsMapping && (
-                <button
-                  onClick={() => { setShowMapper(true); setPreview(false); setPreviewed(false); setGenerated(false); }}
-                  className="tl-btn"
-                  style={{ background: "#7c3aed" }}
-                >
+                <button onClick={() => { setShowMapper(true); setPreview(false); setPreviewed(false); setGenerated(false); }} className="tl-btn" style={{ background: "#7c3aed" }}>
                   <FaTable size={13} /> Re-map Columns
                 </button>
               )}
 
               {fileReady && !showMapper && !generated && !previewed && (
-                <button
-                  onClick={() => {
-                    setPreview(true);
-                    setPreviewed(true);
-                    setGenerated(false);
-                    setSelectedTimeline(null);
-                    gtagEvent('preview_table', { event_count: parsed.length });
-                  }}
-                  className="tl-btn"
-                  style={{ background: "#059669" }}
-                >
+                <button onClick={() => { setPreview(true); setPreviewed(true); setGenerated(false); setSelectedTimeline(null); gtagEvent('preview_table', { event_count: parsed.length }); }} className="tl-btn" style={{ background: "#059669" }}>
                   <FaTable size={13} /> Preview Table
                 </button>
               )}
 
               {fileReady && !showMapper && !generated && previewed && (
-                <button
-                  onClick={() => {
-                    setPreview(true);
-                    setGenerated(false);
-                    setSelectedTimeline(null);
-                  }}
-                  className="tl-btn"
-                  style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text }}
-                >
+                <button onClick={() => { setPreview(true); setGenerated(false); setSelectedTimeline(null); }} className="tl-btn" style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text }}>
                   <FaTable size={13} /> Preview Table
                 </button>
               )}
 
               {fileReady && !showMapper && generated && !selectedTimeline && (
-                <button
-                  onClick={() => {
-                    setPreview(true);
-                    setGenerated(false);
-                    setSelectedTimeline(null);
-                  }}
-                  className="tl-btn"
-                  style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text }}
-                >
+                <button onClick={() => { setPreview(true); setGenerated(false); setSelectedTimeline(null); }} className="tl-btn" style={{ background: dark ? "#334155" : "#e2e8f0", color: th.text }}>
                   <FaTable size={13} /> View Table
                 </button>
               )}
-
             </div>
 
             {validationErrors.length > 0 && (
@@ -948,10 +1118,7 @@ export default function TimelineView() {
                 sampleRows={csvRawRows}
                 dark={dark}
                 onConfirm={handleMappingConfirm}
-                onCancel={() => {
-                  setShowMapper(false);
-                  if (parsed.length === 0) setNeedsMapping(true);
-                }}
+                onCancel={() => { setShowMapper(false); if (parsed.length === 0) setNeedsMapping(true); }}
               />
             )}
           </AnimatePresence>
@@ -963,16 +1130,7 @@ export default function TimelineView() {
                   <FaTable size={14} color="#2563eb" /> Data Preview
                   <span style={{ fontSize: 12, fontWeight: 500, color: dark ? "#64748b" : "#94a3b8" }}>({parsed.length} events)</span>
                 </h3>
-                <button
-                  onClick={() => {
-                    setGenerated(true);
-                    setPreview(false);
-                    setSelectedTimeline(null);
-                    gtagEvent('generate_timeline', { event_count: parsed.length });
-                  }}
-                  className="tl-btn"
-                  style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)" }}
-                >
+                <button onClick={() => { setGenerated(true); setPreview(false); setSelectedTimeline(null); gtagEvent('generate_timeline', { event_count: parsed.length }); }} className="tl-btn" style={{ background: "linear-gradient(135deg,#2563eb,#7c3aed)" }}>
                   <FaChartBar size={13} /> Generate Timeline
                 </button>
               </div>
@@ -995,7 +1153,25 @@ export default function TimelineView() {
                       {parsed.map((r, i) => (
                         <tr key={i} style={{ borderBottom: `1px solid ${th.border}` }}>
                           <td style={{ fontWeight: 600, color: th.text }}>{r.title}</td>
-                          <td style={{ whiteSpace: "nowrap", color: th.text }}>{formatDateDisplay(r.date, r._datePrecision, dateFormat)}</td>
+                          <td style={{ padding: "11px 14px" }}>
+                            <span style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "6px 12px",
+                              borderRadius: "8px",
+                              background: dark ? "rgba(37, 99, 235, 0.12)" : "rgba(37, 99, 235, 0.06)",
+                              color: "#2563eb",
+                              fontWeight: 700,
+                              fontSize: "12px",
+                              border: `1px solid ${dark ? "rgba(37, 99, 235, 0.25)" : "rgba(37, 99, 235, 0.15)"}`,
+                              letterSpacing: "0.03em",
+                              whiteSpace: "nowrap"
+                            }}>
+                              <FaCalendarAlt size={11} />
+                              {formatDateDisplay(r.date, r._datePrecision, dateFormat)}
+                            </span>
+                          </td>
                           <td style={{ opacity: 0.72, minWidth: 140, color: th.text, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description}</td>
                         </tr>
                       ))}
@@ -1018,81 +1194,248 @@ export default function TimelineView() {
                 <div className="tl-controls-right">
 
                   <div className="tl-seg-group" style={{ background: dark ? "#1e293b" : "#f1f5f9" }}>
-                    <button
-                      onClick={() => { setGrouping("month"); gtagEvent('change_grouping', { grouping: 'month' }); }}
-                      className="tl-seg-btn"
-                      style={{ background: grouping !== "year" ? "#2563eb" : "transparent", color: grouping !== "year" ? "#fff" : th.text }}
-                    >
+                    <button onClick={() => { setGrouping("month"); gtagEvent('change_grouping', { grouping: 'month' }); }} className="tl-seg-btn" style={{ background: grouping !== "year" ? "#2563eb" : "transparent", color: grouping !== "year" ? "#fff" : th.text }}>
                       <FaStream size={9} /> Timeline
                     </button>
-                    <button
-                      onClick={() => { setGrouping("year"); gtagEvent('change_grouping', { grouping: 'year' }); }}
-                      className="tl-seg-btn"
-                      style={{ background: grouping === "year" ? "#2563eb" : "transparent", color: grouping === "year" ? "#fff" : th.text }}
-                    >
+                    <button onClick={() => { setGrouping("year"); gtagEvent('change_grouping', { grouping: 'year' }); }} className="tl-seg-btn" style={{ background: grouping === "year" ? "#2563eb" : "transparent", color: grouping === "year" ? "#fff" : th.text }}>
                       <FaCalendarAlt size={9} /> Year
                     </button>
                   </div>
 
-                  <select
-                    value={dateFormat}
-                    onChange={(e) => { setDateFormat(e.target.value); gtagEvent('change_date_format', { format: e.target.value }); }}
-                    className="tl-fmt-select"
-                    style={{ borderColor: th.border, background: th.surface, color: th.text }}
-                  >
-                    {DATE_FORMATS.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
+                  <div ref={dateFormatDropdownRef} style={{ position: "relative" }}>
+                    <button
+                      onClick={() => setDateFormatDropdownOpen((o) => !o)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "8px 14px",
+                        borderRadius: 10,
+                        border: `1px solid ${th.border}`,
+                        background: dateFormatDropdownOpen ? (dark ? "#1e293b" : "#fff") : (dark ? "#1e293b" : "#f8fafc"),
+                        color: th.text,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        boxShadow: dateFormatDropdownOpen ? "0 4px 12px rgba(0,0,0,0.1)" : "none",
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      <FaCalendarAlt size={11} color={dark ? "#94a3b8" : "#64748b"} />
+                      <span>{DATE_FORMATS.find(f => f.value === dateFormat)?.label || "Date Format"}</span>
+                      <FaChevronDown size={9} style={{ transition: "transform 0.2s", transform: dateFormatDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", color: dark ? "#94a3b8" : "#64748b" }} />
+                    </button>
+
+                    <AnimatePresence>
+                      {dateFormatDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                          transition={{ duration: 0.14 }}
+                          style={{
+                            position: "absolute",
+                            top: "calc(100% + 6px)",
+                            left: 0,
+                            background: dark ? "#1e293b" : "#fff",
+                            border: `1px solid ${th.border}`,
+                            borderRadius: 12,
+                            boxShadow: dark ? "0 8px 28px rgba(0,0,0,0.45)" : "0 8px 28px rgba(0,0,0,0.12)",
+                            overflow: "hidden",
+                            minWidth: 140,
+                            zIndex: 200,
+                          }}
+                        >
+                          {DATE_FORMATS.map((fmt) => {
+                            const isActive = dateFormat === fmt.value;
+                            return (
+                              <button
+                                key={fmt.value}
+                                onClick={() => { setDateFormat(fmt.value); setDateFormatDropdownOpen(false); gtagEvent('change_date_format', { format: fmt.value }); }}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  padding: "9px 14px",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  border: "none",
+                                  width: "100%",
+                                  textAlign: "left",
+                                  background: isActive ? (dark ? "rgba(37,99,235,0.15)" : "rgba(37,99,235,0.08)") : "transparent",
+                                  color: isActive ? "#2563eb" : th.text,
+                                  borderLeft: isActive ? "3px solid #2563eb" : "3px solid transparent",
+                                  transition: "background 0.15s"
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isActive) e.currentTarget.style.background = dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isActive) e.currentTarget.style.background = "transparent";
+                                }}
+                              >
+                                <FaCalendarAlt size={10} color={isActive ? "#2563eb" : (dark ? "#64748b" : "#94a3b8")} />
+                                {fmt.label}
+                                {isActive && <span style={{ marginLeft: "auto", fontSize: 10, color: "#2563eb" }}>✓</span>}
+                              </button>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
                   <div className="tl-seg-group" style={{ background: dark ? "#1e293b" : "#f1f5f9" }}>
-                    <button
-                      onClick={() => { setView("horizontal"); gtagEvent('change_view', { view: 'horizontal' }); }}
-                      className="tl-seg-btn"
-                      style={{ background: view === "horizontal" ? "#2563eb" : "transparent", color: view === "horizontal" ? "#fff" : th.text }}
-                    >
+                    <button onClick={() => { setView("horizontal"); gtagEvent('change_view', { view: 'horizontal' }); }} className="tl-seg-btn" style={{ background: view === "horizontal" ? "#2563eb" : "transparent", color: view === "horizontal" ? "#fff" : th.text }}>
                       <FaArrowsAltH size={9} /> Horiz
                     </button>
-                    <button
-                      onClick={() => { setView("vertical"); gtagEvent('change_view', { view: 'vertical' }); }}
-                      className="tl-seg-btn"
-                      style={{ background: view === "vertical" ? "#2563eb" : "transparent", color: view === "vertical" ? "#fff" : th.text }}
-                    >
+                    <button onClick={() => { setView("vertical"); gtagEvent('change_view', { view: 'vertical' }); }} className="tl-seg-btn" style={{ background: view === "vertical" ? "#2563eb" : "transparent", color: view === "vertical" ? "#fff" : th.text }}>
                       <FaArrowsAltV size={9} /> Vert
                     </button>
                   </div>
 
-                  <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     {!selectedTimeline && file && (
-                      <button onClick={handleSaveToDB} className="tl-btn" style={{ background: "#7c3aed", padding: "8px 13px", borderRadius: 9, fontSize: 12 }}>
-                        <FaSave size={11} /> Save
+                      <button onClick={handleSaveToDB} className="tl-btn" style={{ background: "#7c3aed", padding: "8px 13px", borderRadius: 9, fontSize: 12 }} title="Shortcut: Ctrl + S">
+                        <FaSave size={11} /> Save <span className="tl-shortcut-hint" style={{ opacity: 0.7, fontSize: 10, marginLeft: 4 }}>(Ctrl+S)</span>
                       </button>
                     )}
-                    <button
-                      onClick={handleDownloadImage}
-                      disabled={downloading}
-                      className="tl-btn"
-                      style={{ background: "#059669", padding: "8px 13px", borderRadius: 9, fontSize: 12, opacity: downloading ? 0.65 : 1, cursor: downloading ? "not-allowed" : "pointer" }}
-                    >
-                      {downloading
-                        ? <FaSpinner size={11} style={{ animation: "spin 1s linear infinite" }} />
-                        : <FaDownload size={11} />
-                      } Export
-                    </button>
+
+                    <div ref={exportDropdownRef} style={{ position: "relative" }}>
+                      <div style={{ display: "flex", borderRadius: 9, overflow: "hidden", boxShadow: "0 2px 8px rgba(5,150,105,0.25)" }}>
+                        <button
+                          onClick={handleDownloadImage}
+                          disabled={downloading}
+                          className="tl-btn"
+                          title="Shortcut: Ctrl + P"
+                          style={{
+                            background: "#059669", padding: "8px 12px", borderRadius: 0,
+                            fontSize: 12, opacity: downloading ? 0.65 : 1,
+                            cursor: downloading ? "not-allowed" : "pointer",
+                            borderRight: "1px solid rgba(255,255,255,0.2)",
+                          }}
+                        >
+                          {downloading
+                            ? <FaSpinner size={11} style={{ animation: "spin 1s linear infinite" }} />
+                            : exportFormat === "pdf"
+                              ? <FaFilePdf size={11} />
+                              : <FaFileImage size={11} />
+                          }
+                          Export {currentFmt.label} <span className="tl-shortcut-hint" style={{ opacity: 0.7, fontSize: 10, marginLeft: 4 }}>(Ctrl+P)</span>
+                        </button>
+                        <button
+                          onClick={() => setExportDropdownOpen((o) => !o)}
+                          disabled={downloading}
+                          style={{
+                            background: "#059669", border: "none", cursor: "pointer",
+                            padding: "8px 9px", display: "flex", alignItems: "center",
+                            color: "#fff", borderRadius: 0,
+                            opacity: downloading ? 0.65 : 1,
+                          }}
+                          title="Choose export format"
+                        >
+                          <FaChevronDown size={9} style={{ transition: "transform 0.2s", transform: exportDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
+                        </button>
+                      </div>
+
+                      <AnimatePresence>
+                        {exportDropdownOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0,  scale: 1 }}
+                            exit={{   opacity: 0, y: -6, scale: 0.97 }}
+                            transition={{ duration: 0.14 }}
+                            className="export-dropdown"
+                            style={{
+                              position: "absolute", top: "calc(100% + 6px)", right: 0,
+                              background: dark ? "#1e293b" : "#fff",
+                              border: `1px solid ${th.border}`,
+                              borderRadius: 12,
+                              boxShadow: dark ? "0 8px 28px rgba(0,0,0,0.45)" : "0 8px 28px rgba(0,0,0,0.12)",
+                              overflow: "hidden", minWidth: 130, zIndex: 200,
+                            }}
+                          >
+                            {EXPORT_FORMATS.map((fmt) => {
+                              const isActive = exportFormat === fmt.value;
+                              return (
+                                <button
+                                  key={fmt.value}
+                                  className="export-dropdown-item"
+                                  onClick={() => { setExportFormat(fmt.value); setExportDropdownOpen(false); }}
+                                  style={{
+                                    background: isActive
+                                      ? (dark ? "rgba(5,150,105,0.15)" : "rgba(5,150,105,0.08)")
+                                      : "transparent",
+                                    color: isActive ? "#059669" : th.text,
+                                    borderLeft: isActive ? "3px solid #059669" : "3px solid transparent",
+                                  }}
+                                >
+                                  <fmt.icon size={11} color={isActive ? "#059669" : (dark ? "#64748b" : "#94a3b8")} />
+                                  {fmt.label}
+                                  {isActive && <span style={{ marginLeft: "auto", fontSize: 10, color: "#059669" }}>✓</span>}
+                                </button>
+                              );
+                            })}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {grouping === "year" && events.length > 0 && (
+              <div style={{ marginBottom: 20, padding: 16, borderRadius: 14, background: dark ? "#1e293b" : "#f8fafc", border: `1px solid ${th.border}`, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+                  <FaSearch size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: dark ? "#64748b" : "#94a3b8", pointerEvents: "none" }} />
+                  <input 
+                    type="text" 
+                    placeholder="Search events by name or description..." 
+                    value={searchQuery} 
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ 
+                      width: "100%", 
+                      padding: "9px 12px 9px 34px", 
+                      borderRadius: 10, 
+                      border: `1px solid ${th.border}`, 
+                      background: dark ? "#0f172a" : "#fff", 
+                      color: th.text, 
+                      fontSize: 13, 
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }} 
+                  />
+                </div>
+                
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    style={{ padding: "8px 12px", borderRadius: 9, border: "none", background: dark ? "#334155" : "#e2e8f0", color: th.text, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <FaUndo size={10} /> Clear Search
+                  </button>
+                )}
+                
+                {searchQuery && (
+                  <span style={{ fontSize: 12, color: dark ? "#94a3b8" : "#64748b", fontWeight: 600 }}>
+                    Showing {filteredEvents.length} of {events.length} events
+                  </span>
+                )}
+              </div>
+
+              {grouping === "year" && filteredEvents.length > 0 && (
                 <div style={{ marginBottom: 14, padding: "7px 12px", borderRadius: 9, background: dark ? "#1e293b" : "#eff6ff", color: "#2563eb", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <FaCalendarAlt size={10} /> Year view — events grouped by year. Click year badges to open detail modal.
                 </div>
               )}
 
-              {events.length === 0 && (
+              {filteredEvents.length === 0 && (
                 <div style={{ textAlign: "center", padding: "64px 0", color: dark ? "#64748b" : "#94a3b8" }}>
-                  <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
-                  <div style={{ fontSize: 15, fontWeight: 700 }}>No valid timeline events found</div>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}></div>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>
+                    {events.length > 0 ? "No events match your search" : "No valid timeline events found"}
+                  </div>
                 </div>
               )}
 
@@ -1109,11 +1452,11 @@ export default function TimelineView() {
                 className="tl-noscrollbar"
               >
                 <TimelineRenderer
-                  events={events}
+                  events={filteredEvents}
                   grouping={grouping}
                   view={view}
                   dark={dark}
-                  yearGroups={yearGroups}
+                  yearGroups={filteredYearGroups}
                   dateFormat={dateFormat}
                   onSelectEvent={(ev) => { setViewEvent(ev); gtagEvent('view_event_details', { title: ev.title }); }}
                   onSelectYear={(yg) => { setViewYearGroup(yg); gtagEvent('view_year_group', { year: yg.year, event_count: yg.events?.length }); }}
@@ -1125,36 +1468,13 @@ export default function TimelineView() {
 
         <AnimatePresence>
           {viewEvent && (
-            <EventDetailsModal
-              event={viewEvent}
-              dark={dark}
-              grouping={grouping}
-              dateFormat={dateFormat}
-              onClose={() => setViewEvent(null)}
-            />
+            <EventDetailsModal event={viewEvent} dark={dark} grouping={grouping} dateFormat={dateFormat} onClose={() => setViewEvent(null)} />
           )}
           {viewYearGroup && (
-            <YearGroupModal
-              year={viewYearGroup.year}
-              events={viewYearGroup.events}
-              dark={dark}
-              grouping={grouping}
-              onClose={() => setViewYearGroup(null)}
-              onSelectEvent={(ev) => { setViewEvent(ev); gtagEvent('view_event_details_from_year', { title: ev.title, year: viewYearGroup.year }); }}
-            />
+            <YearGroupModal year={viewYearGroup.year} events={viewYearGroup.events} dark={dark} grouping={grouping} onClose={() => setViewYearGroup(null)} onSelectEvent={(ev) => { setViewEvent(ev); gtagEvent('view_event_details_from_year', { title: ev.title, year: viewYearGroup.year }); }} />
           )}
           {editTimeline && (
-            <EditModal
-              dark={dark}
-              timeline={editTimeline}
-              onClose={() => setEditTimeline(null)}
-              onSaved={(updated) => {
-                setSelectedTimeline(updated);
-                fetchSaved();
-                setEditTimeline(null);
-                gtagEvent('edit_timeline_saved', { name: updated.name });
-              }}
-            />
+            <EditModal dark={dark} timeline={editTimeline} onClose={() => setEditTimeline(null)} onSaved={(updated) => { setSelectedTimeline(updated); fetchSaved(); setEditTimeline(null); gtagEvent('edit_timeline_saved', { name: updated.name }); }} />
           )}
         </AnimatePresence>
       </div>

@@ -52,6 +52,7 @@ import {
   FaMobile, FaTabletAlt, FaKeyboard, FaMouse,
   FaPrint, FaFax, FaProjectDiagram, FaUserAstronaut,
 } from "react-icons/fa";
+import { AiFillAlert, AiFillClockCircle} from "react-icons/ai";
 
 import {
   FaHelicopter,
@@ -83,6 +84,9 @@ import {
   FaBowlFood,
   FaKitMedical,
 } from "react-icons/fa6";
+
+import { ImAccessibility, ImAirplane } from "react-icons/im";
+
 
 const RULES = [
   { keys: ["launch", "deploy", "release"], Icon: FaRocket,         color: "#f97316" },
@@ -307,6 +311,10 @@ export const ALL_ICONS = [
   { key: "buildingcols",Icon: FaBuildingColumns,  color: "#64748b",  label: "Institution",  group: "Misc" },
   { key: "cube",        Icon: FaCube,             color: "#6366f1",  label: "Cube",         group: "Misc" },
   { key: "broadcast",   Icon: FaBroadcastTower,   color: "#f97316",  label: "Broadcast",    group: "Misc" },
+  {key:"alert", Icon: AiFillAlert, color:"#ef4444", label:"Alert", group:"Misc"},
+  {key:"clock",Icon: AiFillClockCircle, color:"#f59e0b", label:"Clock", group:"Misc"},
+  {key :"accessibility", Icon: ImAccessibility, color:"#22c55e", label:"Accessibility", group:"Misc" },
+  {key:"aeroplane", Icon:  ImAirplane, color:"#38bdf8", label:"Aeroplane", group:"Travel"}
 ];
 
 const iconOverrides = {};
