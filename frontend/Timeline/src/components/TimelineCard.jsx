@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaCalendarAlt, FaExpandAlt, FaPencilAlt,
-  FaTimes, FaSearch, FaUndo,
+  FaTimes, FaSearch, FaUndo, FaChevronDown, FaChevronUp,
+  FaCheckCircle, FaLayerGroup,
 } from "react-icons/fa";
 import { formatDate } from "../utils/helpers";
 import { ALL_ICONS } from "../utils/eventIcons";
@@ -10,11 +11,20 @@ import { useEventIcon, useIconActions } from "../context/IconContext";
 
 const GROUPS = ["All", ...Array.from(new Set(ALL_ICONS.map((i) => i.group)))];
 
-export default function TimelineCard({ event, grouping, dateFormat, dark, onClick }) {
+const toDateObj = (d) => (d instanceof Date ? d : new Date(d));
+const formatPillDate = (d) =>
+  toDateObj(d).toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+const formatRowDate = (d) =>
+  toDateObj(d).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+const formatWeekday = (d) =>
+  toDateObj(d).toLocaleDateString("en-US", { weekday: "short" });
+
+export default function TimelineCard({ event, grouping, dateFormat, dark, onClick, onSelectSession }) {
   const [showPicker, setShowPicker]   = useState(false);
   const [iconHovered, setIconHovered] = useState(false);
   const [search, setSearch]           = useState("");
   const [activeGroup, setActiveGroup] = useState("All");
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   const { Icon, color }                    = useEventIcon(event);
   const { applyOverride, removeOverride }  = useIconActions();
@@ -24,6 +34,11 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
         input: "#0f172a", muted: "#475569" }
     : { bg: "#fff", text: "#111827", sub: "#64748b", border: "#e2e8f0",
         input: "#f8fafc", muted: "#94a3b8" };
+
+  const hasSessions = Array.isArray(event.sessions) && event.sessions.length > 1;
+  const sessionList = hasSessions ? event.sessions : []; 
+  const visiblePills = sessionsOpen ? [] : sessionList.slice(0, 3);
+  const extraCount = sessionList.length - visiblePills.length;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -52,6 +67,17 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
     setShowPicker(true);
   };
 
+  const toggleSessions = (e) => {
+    e.stopPropagation();
+    setSessionsOpen((o) => !o);
+  };
+
+  const handleSessionClick = (e, session) => {
+    e.stopPropagation();
+    if (!onSelectSession) return;
+    onSelectSession(session);
+  };
+
   return (
     <>
       <style>{`
@@ -70,6 +96,10 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
         .group-tab-scroll::-webkit-scrollbar { display: none; }
         .icon-btn:hover { transform: scale(1.08); }
         .icon-btn { transition: transform 0.12s, background 0.12s, border-color 0.12s; }
+        .session-pill:hover { transform: translateY(-1px); }
+        .session-pill { transition: transform 0.12s, background 0.12s, border-color 0.12s; cursor: pointer; }
+        .session-row:hover { background: ${dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; }
+        .session-row { cursor: pointer; transition: background 0.12s; }
       `}</style>
 
       <div style={{ position: "relative" }}>
@@ -86,13 +116,15 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
             minWidth: 240,
             background: theme.bg,
             borderRadius: 16,
-            padding: "16px 16px 40px",
+            padding: hasSessions ? "16px 16px 18px" : "16px 16px 40px",
             boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
             cursor: "pointer",
-            border: `1px solid ${theme.border}`,
+            border: `1px solid ${hasSessions && sessionsOpen ? color + "88" : theme.border}`,
+            borderLeft: hasSessions ? `4px solid ${color}` : `1px solid ${theme.border}`,
             position: "relative",
             overflow: "hidden",
             boxSizing: "border-box",
+            transition: "border-color 0.2s",
           }}
         >
           <div style={{
@@ -101,7 +133,7 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
             borderRadius: "16px 16px 0 0",
           }} />
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 2 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 2, gap: 10 }}>
             <div
               className="tl-card-icon"
               onMouseEnter={() => setIconHovered(true)}
@@ -133,13 +165,35 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
               </AnimatePresence>
             </div>
 
-            <div style={{
-              display: "flex", alignItems: "center", gap: 4,
-              color: "#2563eb", fontWeight: 700, fontSize: 10,
-              background: "#2563eb12", padding: "3px 8px", borderRadius: 20,
-              whiteSpace: "nowrap",
-            }}>
-              <FaCalendarAlt size={9} /> {formatDate(event.date, grouping, dateFormat, event._datePrecision)}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            
+              <div style={{
+                display: "flex", alignItems: "center", gap: 4,
+                color: "#2563eb", fontWeight: 700, fontSize: 10,
+                background: "#2563eb12", padding: "3px 8px", borderRadius: 20,
+                whiteSpace: "nowrap",
+              }}>
+                <FaCalendarAlt size={9} />
+                {formatDate(hasSessions ? sessionList[0].date : event.date, grouping, dateFormat, event._datePrecision)}
+              </div>
+
+              {hasSessions && (
+                <button
+                  onClick={toggleSessions}
+                  className="session-pill"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    color: "#059669", fontWeight: 700, fontSize: 11,
+                    background: dark ? "rgba(5,150,105,0.15)" : "#dcfce7",
+                    border: "1px solid #05966944",
+                    padding: "4px 10px", borderRadius: 20,
+                    whiteSpace: "nowrap", cursor: "pointer",
+                  }}
+                >
+                  <FaLayerGroup size={9} /> {sessionList.length} Events
+                  {sessionsOpen ? <FaChevronUp size={9} /> : <FaChevronDown size={9} />}
+                </button>
+              )}
             </div>
           </div>
 
@@ -161,14 +215,123 @@ export default function TimelineCard({ event, grouping, dateFormat, dark, onClic
               color: theme.sub, fontSize: 12, lineHeight: 1.55,
               display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
               overflow: "hidden",
+              marginBottom: hasSessions ? 2 : 0,
             }}
           >
-            {event.description}
+            {event.description && event.description.trim() ? event.description : "No description provided."}
           </div>
 
-          <div style={{ position: "absolute", bottom: 12, right: 13, color, opacity: 0.4 }}>
-            <FaExpandAlt size={10} />
-          </div>
+          {/* ---- Events section ---- */}
+          {hasSessions && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${theme.border}` }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: theme.muted, letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 5 }}>
+                  <FaLayerGroup size={9} /> DATES
+                </span>
+                {sessionsOpen && (
+                  <span style={{ fontSize: 11, color: theme.sub, fontWeight: 600 }}>
+                    Total Events: {sessionList.length}
+                  </span>
+                )}
+              </div>
+
+              {!sessionsOpen && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {visiblePills.map((s, i) => (
+                    <button
+                      key={i}
+                      className="session-pill"
+                      title="View this event's details"
+                      onClick={(e) => handleSessionClick(e, s)}
+                      style={{
+                        fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                        border: `1px solid ${color}44`, color, background: `${color}10`,
+                      }}
+                    >
+                      {formatPillDate(s.date)}
+                    </button>
+                  ))}
+                  {extraCount > 0 && (
+                    <button
+                      onClick={toggleSessions}
+                      className="session-pill"
+                      style={{
+                        fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20,
+                        border: `1px solid ${theme.border}`, color: theme.sub,
+                        background: dark ? "#0f172a" : "#f1f5f9", cursor: "pointer",
+                      }}
+                    >
+                      +{extraCount} more
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <AnimatePresence>
+                {sessionsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    style={{ overflow: "hidden" }}
+                  >
+                    <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${theme.border}` }}>
+                      {sessionList.map((s, i) => (
+                        <div
+                          key={i}
+                          className="session-row"
+                          title="View this event's details"
+                          onClick={(e) => handleSessionClick(e, s)}
+                          style={{
+                            padding: "10px 12px",
+                            background: dark ? "#0f172a" : "#fafbfc",
+                            borderTop: i === 0 ? "none" : `1px solid ${theme.border}`,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: theme.text, fontWeight: 600 }}>
+                              <FaCheckCircle size={12} color={color} /> {formatRowDate(s.date)}
+                            </span>
+                            <span style={{ fontSize: 11.5, color: theme.muted, fontWeight: 600 }}>
+                              {formatWeekday(s.date)}
+                            </span>
+                          </div>
+                          <div style={{
+                            marginTop: 5, marginLeft: 20, fontSize: 11.5, lineHeight: 1.5,
+                            color: theme.sub,
+                          }}>
+                            {s.description && s.description.trim() ? s.description : "No description provided."}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ textAlign: "center", marginTop: 10 }}>
+                      <button
+                        onClick={toggleSessions}
+                        style={{
+                          background: "none", border: "none", cursor: "pointer",
+                          fontSize: 12, fontWeight: 700, color: theme.sub,
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                        }}
+                      >
+                        Show less <FaChevronUp size={9} />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {!hasSessions && (
+            <div style={{ position: "absolute", bottom: 12, right: 13, color, opacity: 0.4 }}>
+              <FaExpandAlt size={10} />
+            </div>
+          )}
         </motion.div>
 
         <AnimatePresence>

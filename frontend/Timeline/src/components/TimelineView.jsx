@@ -360,22 +360,58 @@ export default function TimelineView() {
     } catch { alert("Save failed"); }
   };
 
-  
+
   const events = selectedTimeline ? selectedTimeline.events : parsed;
 
+ 
+  const groupedEvents = useMemo(() => {
+    const map = new Map();
+    let soloCount = 0;
+
+    events.forEach((ev) => {
+      const key = (ev.title || ev.name || "").trim().toLowerCase();
+      const sessionEntry = { date: ev.date, description: ev.description || "" };
+
+      if (!key) {
+        map.set(`__solo_${soloCount++}`, { ...ev, sessions: [sessionEntry] });
+        return;
+      }
+
+      if (!map.has(key)) {
+        map.set(key, { ...ev, sessions: [sessionEntry] });
+      } else {
+        const existing = map.get(key);
+        existing.sessions.push(sessionEntry);
+        if (new Date(ev.date) < new Date(existing.date)) {
+          existing.date = ev.date;
+        }
+      }
+    });
+
+    return Array.from(map.values()).map((ev) => {
+      const sortedSessions = [...ev.sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+      return {
+        ...ev,
+        sessions: sortedSessions,
+        dates: sortedSessions.map((s) => s.date),
+        description: ev.description || sortedSessions.find((s) => s.description)?.description || "",
+      };
+    });
+  }, [events]);
+
   const filteredEvents = useMemo(() => {
-    if (!searchQuery.trim()) return events;
+    if (!searchQuery.trim()) return groupedEvents;
     const query = searchQuery.toLowerCase().trim();
-    return events.filter((ev) =>
+    return groupedEvents.filter((ev) =>
       (ev.title && ev.title.toLowerCase().includes(query)) ||
       (ev.name && ev.name.toLowerCase().includes(query)) ||
       (ev.description && ev.description.toLowerCase().includes(query))
     );
-  }, [events, searchQuery]);
+  }, [groupedEvents, searchQuery]);
 
   const filteredYearGroups = useMemo(() => groupEventsByYear(filteredEvents), [filteredEvents]);
 
-  
+
   const handleDownloadImage = async () => {
     if (!filteredEvents || filteredEvents.length === 0) return;
     setDownloading(true);
@@ -544,7 +580,11 @@ export default function TimelineView() {
           ctx.fillStyle = accentGrad;
           ctx.fillRect(cardX, cardY, CARD_W, 3);
 
-          const dateStr = ev.date ? formatDate(ev.date, grouping, dateFormat, ev._datePrecision) : "";
+          const dateStr = ev.date
+            ? (Array.isArray(ev.dates) && ev.dates.length > 1
+                ? `${ev.dates.length} Sessions`
+                : formatDate(ev.date, grouping, dateFormat, ev._datePrecision))
+            : "";
           ctx.font = "600 11px Inter, sans-serif"; ctx.fillStyle = accentClr;
           ctx.textBaseline = "top";
           ctx.fillText(dateStr, cardX + 14, cardY + 14);
@@ -1419,7 +1459,7 @@ export default function TimelineView() {
                 
                 {searchQuery && (
                   <span style={{ fontSize: 12, color: dark ? "#94a3b8" : "#64748b", fontWeight: 600 }}>
-                    Showing {filteredEvents.length} of {events.length} events
+                    Showing {filteredEvents.length} of {groupedEvents.length} events
                   </span>
                 )}
               </div>
@@ -1434,7 +1474,7 @@ export default function TimelineView() {
                 <div style={{ textAlign: "center", padding: "64px 0", color: dark ? "#64748b" : "#94a3b8" }}>
                   <div style={{ fontSize: 36, marginBottom: 12 }}></div>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>
-                    {events.length > 0 ? "No events match your search" : "No valid timeline events found"}
+                    {groupedEvents.length > 0 ? "No events match your search" : "No valid timeline events found"}
                   </div>
                 </div>
               )}

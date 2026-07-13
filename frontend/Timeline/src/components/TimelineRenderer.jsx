@@ -176,7 +176,16 @@ function VerticalEventRow({ ev, i, total, grouping, dateFormat, dark, onSelectEv
       </div>
 
       <div style={{ flex: 1, minWidth: 0, paddingBottom: i !== total - 1 ? 20 : 0 }}>
-        <TimelineCard event={ev} grouping={grouping} dateFormat={dateFormat} dark={dark} onClick={() => onSelectEvent(ev)} />
+        <TimelineCard
+          event={ev}
+          grouping={grouping}
+          dateFormat={dateFormat}
+          dark={dark}
+          onClick={() => onSelectEvent(ev)}
+          onSelectSession={(session) =>
+            onSelectEvent({ ...ev, date: session.date, description: session.description })
+          }
+        />
       </div>
 
       <AnimatePresence>
@@ -466,7 +475,16 @@ export default function TimelineRenderer({
         {sortedEvents.map((ev, i) => (
           <div key={ev._eid ?? ev.id ?? i} style={{ display: "flex", alignItems: "center", gap: 20 }}>
             <div style={{ width: 280, flexShrink: 0 }}>
-              <TimelineCard event={ev} grouping={grouping} dateFormat={dateFormat} dark={dark} onClick={() => onSelectEvent(ev)} />
+              <TimelineCard
+                event={ev}
+                grouping={grouping}
+                dateFormat={dateFormat}
+                dark={dark}
+                onClick={() => onSelectEvent(ev)}
+                onSelectSession={(session) =>
+                  onSelectEvent({ ...ev, date: session.date, description: session.description })
+                }
+              />
             </div>
             {i !== sortedEvents.length - 1 && (
               <div style={{ width: 32, height: 3, flexShrink: 0, background: "linear-gradient(90deg, #2563eb55, #7c3aed55)", borderRadius: 10 }} />
