@@ -432,39 +432,82 @@ export default function TimelineView() {
         const DPR          = 2;
         const OUTER_PAD    = 48;
         const COL_GAP      = 40;
-        const CARD_W       = 340;
-        const CARD_H_BASE  = 108;
-        const CARD_GAP     = 14;
-        const DOT_R        = 14;
+        const CARD_W       = 520;
+        const CARD_H_BASE  = 112;
+        const CARD_GAP     = 20;
+        const DOT_R        = 16;
         const DOT_OFFSET   = DOT_R + 8;
-        const CARD_OFFSET  = DOT_OFFSET + DOT_R + 16;
+        const CARD_OFFSET  = DOT_OFFSET + DOT_R + 24;
         const COL_W        = CARD_OFFSET + CARD_W;
-        const TITLE_H      = 80;
-        const FOOTER_H     = 36;
-        const MAX_COL_H    = 2400;
+        const TITLE_H      = 84;
+        const FOOTER_H     = 42;
 
         const tempCanvas = document.createElement("canvas");
         const tempCtx    = tempCanvas.getContext("2d");
-        tempCtx.font     = "400 12px Inter, sans-serif";
+        tempCtx.font     = "400 13px Inter, sans-serif";
 
-        const cardHeights = filteredEvents.map((ev) => {
-          const words = (ev.description || "").split(" ");
-          let lines = 1, line = "";
+        const toDateObj = (d) => (d instanceof Date ? d : new Date(d));
+        const formatRowDate = (d) =>
+          toDateObj(d).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+        const formatWeekday = (d) =>
+          toDateObj(d).toLocaleDateString("en-US", { weekday: "short" });
+
+        const wrapLines = (text, maxW, font) => {
+          if (!text) return [];
+          tempCtx.font = font;
+          const words = text.split(" ");
+          const lines = [];
+          let cur = "";
           for (const word of words) {
-            const test = line ? line + " " + word : word;
-            if (tempCtx.measureText(test).width > CARD_W - 28 && line) { lines++; line = word; }
-            else { line = test; }
+            const test = cur ? cur + " " + word : word;
+            if (tempCtx.measureText(test).width > maxW && cur) {
+              lines.push(cur);
+              cur = word;
+            } else {
+              cur = test;
+            }
           }
-          const clampedLines = Math.min(lines, 3);
-          return Math.max(CARD_H_BASE, 14 + 19 + 17 + clampedLines * 16 + 14);
-        });
+          if (cur) lines.push(cur);
+          return lines;
+        };
 
-        const rowH         = Math.max(...cardHeights) + CARD_GAP;
-        const ROWS_PER_COL = Math.max(1, Math.floor(MAX_COL_H / rowH));
-        const NUM_COLS     = Math.ceil(filteredEvents.length / ROWS_PER_COL);
-        const tallestCol   = Math.min(filteredEvents.length, ROWS_PER_COL);
-        const totalW       = OUTER_PAD + NUM_COLS * COL_W + (NUM_COLS - 1) * COL_GAP + OUTER_PAD;
-        const totalH       = OUTER_PAD + TITLE_H + tallestCol * rowH + FOOTER_H + OUTER_PAD;
+        const calcCardLayout = (ev) => {
+          const sessions = Array.isArray(ev.sessions) && ev.sessions.length > 1 ? ev.sessions : null;
+          const mainDescLines = wrapLines(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
+          const clampedMainLines = Math.min(mainDescLines.length, 3);
+          const headerH = 18 + 20 + 20 + clampedMainLines * 18 + (sessions ? 14 : 18);
+
+          let sessionsH = 0;
+          let sessionRowLayouts = [];
+
+          if (sessions) {
+            sessionsH += 32; // section header ("DATES", "Total Events: X")
+            sessionRowLayouts = sessions.map((s) => {
+              const sLines = wrapLines(s.description || "", CARD_W - 36 - 28, "400 12.5px Inter, sans-serif");
+              const rowHeight = 12 + 18 + (sLines.length > 0 ? 6 + sLines.length * 18 : 0) + 12;
+              return { s, lines: sLines, height: rowHeight };
+            });
+            const rowsTotalH = sessionRowLayouts.reduce((acc, r) => acc + r.height, 0);
+            sessionsH += rowsTotalH + 18; // bottom padding
+          }
+
+          const totalCardH = Math.max(CARD_H_BASE, headerH + sessionsH);
+          return { cardH: totalCardH, sessions, sessionRowLayouts, clampedMainLines };
+        };
+
+        const cardLayouts = filteredEvents.map(calcCardLayout);
+        const cardHeights = cardLayouts.map((cl) => cl.cardH);
+
+        const rowPositions = [];
+        let curY = OUTER_PAD + TITLE_H;
+        for (let i = 0; i < filteredEvents.length; i++) {
+          const h = cardHeights[i];
+          rowPositions.push({ y: curY, h });
+          curY += h + CARD_GAP;
+        }
+
+        const totalW = OUTER_PAD + COL_W + OUTER_PAD;
+        const totalH = curY - CARD_GAP + FOOTER_H + OUTER_PAD;
 
         const canvas  = document.createElement("canvas");
         canvas.width  = totalW * DPR;
@@ -473,8 +516,8 @@ export default function TimelineView() {
         ctx.scale(DPR, DPR);
 
         const bgColor   = dark ? "#0f172a" : "#f8fafc";
-        const textColor = dark ? "#f1f5f9" : "#111827";
-        const subColor  = dark ? "#94a3b8" : "#64748b";
+        const textColor = dark ? "#f8fafc" : "#0f172a";
+        const subColor  = dark ? "#94a3b8" : "#475569";
         const cardBg    = dark ? "#1e293b" : "#ffffff";
         const cardBdr   = dark ? "#334155" : "#e2e8f0";
         const accentClr = "#2563eb";
@@ -505,53 +548,40 @@ export default function TimelineView() {
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, totalW, totalH);
 
-        for (let c = 0; c < NUM_COLS; c++) {
-          const colX = OUTER_PAD + c * (COL_W + COL_GAP);
-          ctx.fillStyle = dark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)";
-          roundRect(colX - 8, OUTER_PAD + TITLE_H - 8, COL_W + 16, tallestCol * rowH + 16, 16);
-          ctx.fill();
-        }
+        const colX = OUTER_PAD;
+        ctx.fillStyle = dark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)";
+        roundRect(colX - 10, OUTER_PAD + TITLE_H - 10, COL_W + 20, (curY - CARD_GAP) - (OUTER_PAD + TITLE_H) + 20, 16);
+        ctx.fill();
 
         const titleGrad = ctx.createLinearGradient(OUTER_PAD, 0, OUTER_PAD + 300, 0);
         titleGrad.addColorStop(0, "#2563eb");
         titleGrad.addColorStop(1, "#7c3aed");
-        roundRect(OUTER_PAD, OUTER_PAD, 10, 44, 3);
+        roundRect(OUTER_PAD, OUTER_PAD + 2, 8, 48, 4);
         ctx.fillStyle = titleGrad; ctx.fill();
-        ctx.font = "700 26px Inter, sans-serif"; ctx.fillStyle = textColor;
+
+        ctx.font = "700 28px Inter, sans-serif"; ctx.fillStyle = textColor;
         ctx.textBaseline = "middle";
-        ctx.fillText(timelineName, OUTER_PAD + 22, OUTER_PAD + 22);
-        ctx.font = "400 13px Inter, sans-serif"; ctx.fillStyle = subColor;
+        ctx.fillText(timelineName, OUTER_PAD + 24, OUTER_PAD + 20);
+
+        ctx.font = "500 13px Inter, sans-serif"; ctx.fillStyle = subColor;
         ctx.textBaseline = "top";
         ctx.fillText(
-          `${filteredEvents.length} events · ${grouping} grouping · ${dateFormat} · ${view} · ${NUM_COLS} column${NUM_COLS > 1 ? "s" : ""}`,
-          OUTER_PAD + 22, OUTER_PAD + 50
+          `${filteredEvents.length} events · ${grouping} grouping · ${dateFormat} · ${view}`,
+          OUTER_PAD + 24, OUTER_PAD + 46
         );
-
-        if (NUM_COLS > 1) {
-          for (let c = 0; c < NUM_COLS; c++) {
-            const colX  = OUTER_PAD + c * (COL_W + COL_GAP);
-            const start = c * ROWS_PER_COL + 1;
-            const end   = Math.min((c + 1) * ROWS_PER_COL, filteredEvents.length);
-            ctx.font = "600 11px Inter, sans-serif";
-            ctx.fillStyle = dark ? "#475569" : "#94a3b8";
-            ctx.textBaseline = "top";
-            ctx.fillText(`Events ${start}–${end}`, colX + DOT_OFFSET + DOT_R + 16, OUTER_PAD + TITLE_H - 20);
-          }
-        }
 
         for (let i = 0; i < filteredEvents.length; i++) {
           const ev     = filteredEvents[i];
-          const CARD_H = cardHeights[i];
-          const col    = Math.floor(i / ROWS_PER_COL);
-          const row    = i % ROWS_PER_COL;
-          const colX   = OUTER_PAD + col * (COL_W + COL_GAP);
+          const layout = cardLayouts[i];
+          const CARD_H = layout.cardH;
+          const pos    = rowPositions[i];
           const dotX   = colX + DOT_OFFSET;
           const cardX  = colX + CARD_OFFSET;
-          const cardY  = OUTER_PAD + TITLE_H + row * rowH;
-          const dotY   = cardY + CARD_H / 2;
+          const cardY  = pos.y;
+          const dotY   = cardY + 54; // align dot nicely with card header
 
-          if (row < ROWS_PER_COL - 1 && i < filteredEvents.length - 1 && Math.floor((i + 1) / ROWS_PER_COL) === col) {
-            const nextDotY = dotY + rowH;
+          if (i < filteredEvents.length - 1) {
+            const nextDotY = rowPositions[i + 1].y + 54;
             const lineGrad = ctx.createLinearGradient(dotX, dotY, dotX, nextDotY);
             lineGrad.addColorStop(0, "#2563eb66");
             lineGrad.addColorStop(1, "#7c3aed33");
@@ -563,17 +593,25 @@ export default function TimelineView() {
           }
 
           const { Icon: EvIcon, color: evColor } = getEventIcon(ev);
-          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R + 5, 0, Math.PI * 2); ctx.fillStyle = `${evColor}20`; ctx.fill();
+          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R + 6, 0, Math.PI * 2); ctx.fillStyle = `${evColor}20`; ctx.fill();
           ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.fillStyle = `${evColor}33`; ctx.fill();
-          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.strokeStyle = `${evColor}88`; ctx.lineWidth = 1.5; ctx.stroke();
-          await renderIconToCanvas(ctx, EvIcon, evColor, dotX, dotY, 16);
+          ctx.beginPath(); ctx.arc(dotX, dotY, DOT_R, 0, Math.PI * 2);     ctx.strokeStyle = `${evColor}99`; ctx.lineWidth = 1.5; ctx.stroke();
+          await renderIconToCanvas(ctx, EvIcon, evColor, dotX, dotY, 18);
 
-          ctx.shadowColor = dark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.08)";
-          ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
-          roundRect(cardX, cardY, CARD_W, CARD_H, 12);
+          ctx.shadowColor = dark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.06)";
+          ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+          roundRect(cardX, cardY, CARD_W, CARD_H, 14);
           ctx.fillStyle = cardBg; ctx.fill();
           ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-          ctx.strokeStyle = cardBdr; ctx.lineWidth = 1; ctx.stroke();
+          ctx.strokeStyle = layout.sessions ? `${evColor}66` : cardBdr;
+          ctx.lineWidth = 1; ctx.stroke();
+
+          // Left border accent for sessions
+          if (layout.sessions) {
+            ctx.fillStyle = evColor;
+            roundRect(cardX, cardY, 4, CARD_H, 2);
+            ctx.fill();
+          }
 
           const accentGrad = ctx.createLinearGradient(cardX, 0, cardX + CARD_W, 0);
           accentGrad.addColorStop(0, evColor); accentGrad.addColorStop(1, "#7c3aed");
@@ -582,38 +620,135 @@ export default function TimelineView() {
 
           const dateStr = ev.date
             ? (Array.isArray(ev.dates) && ev.dates.length > 1
-                ? `${ev.dates.length} Sessions`
+                ? formatDate(layout.sessions[0].date, grouping, dateFormat, ev._datePrecision)
                 : formatDate(ev.date, grouping, dateFormat, ev._datePrecision))
             : "";
-          ctx.font = "600 11px Inter, sans-serif"; ctx.fillStyle = accentClr;
+          ctx.font = "700 12px Inter, sans-serif"; ctx.fillStyle = accentClr;
           ctx.textBaseline = "top";
-          ctx.fillText(dateStr, cardX + 14, cardY + 14);
+          ctx.fillText(dateStr, cardX + 18, cardY + 16);
 
-          ctx.font = "700 14px Inter, sans-serif"; ctx.fillStyle = textColor;
-          ctx.fillText(trunc(ev.title || ev.name || "Untitled", CARD_W - 28), cardX + 14, cardY + 33);
-
-          ctx.font = "400 12px Inter, sans-serif"; ctx.fillStyle = subColor;
-          const words = (ev.description || "").split(" ");
-          let line = "", descY = cardY + 56, lineCount = 0;
-          for (const word of words) {
-            const test = line ? line + " " + word : word;
-            if (ctx.measureText(test).width > CARD_W - 28 && line) {
-              if (lineCount >= 2) { ctx.fillText(line + "…", cardX + 14, descY); break; }
-              ctx.fillText(line, cardX + 14, descY);
-              line = word; descY += 16; lineCount++;
-              if (descY > cardY + CARD_H - 10) { ctx.fillText(line + "…", cardX + 14, descY - 16); break; }
-            } else { line = test; }
+          // If sessions exist, draw session badge on header
+          if (layout.sessions) {
+            const badgeText = `${layout.sessions.length} Events`;
+            ctx.font = "700 11px Inter, sans-serif";
+            const badgeW = ctx.measureText(badgeText).width + 18;
+            const badgeX = cardX + CARD_W - 18 - badgeW;
+            const badgeY = cardY + 14;
+            roundRect(badgeX, badgeY, badgeW, 22, 11);
+            ctx.fillStyle = dark ? "rgba(5,150,105,0.22)" : "#dcfce7";
+            ctx.fill();
+            ctx.strokeStyle = "#05966955";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = "#059669";
+            ctx.fillText(badgeText, badgeX + 9, badgeY + 4.5);
           }
-          if (line && descY <= cardY + CARD_H - 10 && lineCount < 3) ctx.fillText(line, cardX + 14, descY);
+
+          ctx.font = "700 16px Inter, sans-serif"; ctx.fillStyle = textColor;
+          ctx.fillText(trunc(ev.title || ev.name || "Untitled", CARD_W - 36), cardX + 18, cardY + 36);
+
+          ctx.font = "400 13px Inter, sans-serif"; ctx.fillStyle = subColor;
+          const mainLines = wrapLines(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
+          let descY = cardY + 62;
+          for (let m = 0; m < Math.min(mainLines.length, 3); m++) {
+            ctx.fillText(mainLines[m], cardX + 18, descY);
+            descY += 18;
+          }
+
+          // Render expanded sessions if present
+          if (layout.sessions) {
+            descY += 8;
+            ctx.strokeStyle = dark ? "#334155" : "#e2e8f0";
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(cardX + 18, descY);
+            ctx.lineTo(cardX + CARD_W - 18, descY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            descY += 10;
+
+            // Header DATES and Total Events
+            ctx.font = "700 11px Inter, sans-serif";
+            ctx.fillStyle = dark ? "#94a3b8" : "#64748b";
+            ctx.fillText("DATES", cardX + 18, descY);
+
+            const totalText = `Total Events: ${layout.sessions.length}`;
+            ctx.font = "600 11px Inter, sans-serif";
+            ctx.fillStyle = subColor;
+            const totalW = ctx.measureText(totalText).width;
+            ctx.fillText(totalText, cardX + CARD_W - 18 - totalW, descY);
+            descY += 18;
+
+            // Sessions container
+            const boxX = cardX + 18;
+            const boxW = CARD_W - 36;
+            const rowsTotalH = layout.sessionRowLayouts.reduce((acc, r) => acc + r.height, 0);
+
+            roundRect(boxX, descY, boxW, rowsTotalH, 12);
+            ctx.fillStyle = dark ? "#0b1329" : "#f8fafc";
+            ctx.fill();
+            ctx.strokeStyle = dark ? "#334155" : "#e2e8f0";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            let rowY = descY;
+            for (let rIdx = 0; rIdx < layout.sessionRowLayouts.length; rIdx++) {
+              const rowData = layout.sessionRowLayouts[rIdx];
+              if (rIdx > 0) {
+                ctx.strokeStyle = dark ? "#1e293b" : "#edf2f7";
+                ctx.beginPath();
+                ctx.moveTo(boxX, rowY);
+                ctx.lineTo(boxX + boxW, rowY);
+                ctx.stroke();
+              }
+
+              // Draw row check circle icon
+              ctx.beginPath();
+              ctx.arc(boxX + 16, rowY + 18, 5, 0, Math.PI * 2);
+              ctx.fillStyle = evColor;
+              ctx.fill();
+
+              // Date text
+              ctx.font = "600 13px Inter, sans-serif";
+              ctx.fillStyle = textColor;
+              ctx.fillText(formatRowDate(rowData.s.date), boxX + 28, rowY + 10);
+
+              // Weekday badge
+              const wkText = formatWeekday(rowData.s.date);
+              ctx.font = "600 11px Inter, sans-serif";
+              const wkW = ctx.measureText(wkText).width;
+              const wkBadgeW = wkW + 14;
+              const wkBadgeX = boxX + boxW - 12 - wkBadgeW;
+              const wkBadgeY = rowY + 9;
+              roundRect(wkBadgeX, wkBadgeY, wkBadgeW, 18, 6);
+              ctx.fillStyle = dark ? "rgba(255,255,255,0.06)" : "#e2e8f0";
+              ctx.fill();
+              ctx.fillStyle = dark ? "#cbd5e1" : "#475569";
+              ctx.fillText(wkText, wkBadgeX + 7, wkBadgeY + 3);
+
+              // Description lines
+              if (rowData.lines.length > 0) {
+                ctx.font = "400 12.5px Inter, sans-serif";
+                ctx.fillStyle = subColor;
+                let sDescY = rowY + 32;
+                for (const sLine of rowData.lines) {
+                  ctx.fillText(sLine, boxX + 28, sDescY);
+                  sDescY += 18;
+                }
+              }
+
+              rowY += rowData.height;
+            }
+          }
         }
 
-        ctx.fillStyle = dark ? "#1e293b" : "#e2e8f0";
+        ctx.fillStyle = dark ? "#1e293b" : "#f1f5f9";
         ctx.fillRect(0, totalH - FOOTER_H, totalW, FOOTER_H);
-        ctx.font = "400 11px Inter, sans-serif"; ctx.fillStyle = dark ? "#475569" : "#94a3b8";
+        ctx.font = "500 12px Inter, sans-serif"; ctx.fillStyle = dark ? "#64748b" : "#64748b";
         ctx.textBaseline = "bottom";
         ctx.fillText(
           `Timeline View · ${timelineName} · ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
-          OUTER_PAD, totalH - 12
+          OUTER_PAD, totalH - 14
         );
 
         return canvas;
@@ -624,46 +759,67 @@ export default function TimelineView() {
 
         const DPR         = 2;
         const OUTER_PAD   = 48;
-        const CARD_W      = 340;
-        const CARD_H_BASE = 108;
-        const CARD_GAP    = 14;
-        const DOT_R       = 14;
-        const DOT_OFFSET  = DOT_R + 8;
-        const CARD_OFFSET = DOT_OFFSET + DOT_R + 16;
-        const COL_W       = CARD_OFFSET + CARD_W;
-        const TITLE_H     = 80;
-        const FOOTER_H    = 36;
-        const MAX_COL_H   = 2400;
+        const CARD_W      = 520;
+        const CARD_H_BASE = 112;
+        const CARD_GAP    = 20;
+        const TITLE_H     = 84;
 
         const tempC = document.createElement("canvas");
         const tempX = tempC.getContext("2d");
-        tempX.font  = "400 12px Inter, sans-serif";
-        const cardHeightsPdf = filteredEvents.map((ev) => {
-          const words = (ev.description || "").split(" ");
-          let lines = 1, line = "";
+        tempX.font  = "400 13px Inter, sans-serif";
+
+        const wrapLinesPdf = (text, maxW, font) => {
+          if (!text) return [];
+          tempX.font = font;
+          const words = text.split(" ");
+          const lines = [];
+          let cur = "";
           for (const word of words) {
-            const test = line ? line + " " + word : word;
-            if (tempX.measureText(test).width > CARD_W - 28 && line) { lines++; line = word; }
-            else { line = test; }
+            const test = cur ? cur + " " + word : word;
+            if (tempX.measureText(test).width > maxW && cur) {
+              lines.push(cur);
+              cur = word;
+            } else {
+              cur = test;
+            }
           }
-          return Math.max(CARD_H_BASE, 14 + 19 + 17 + Math.min(lines, 3) * 16 + 14);
+          if (cur) lines.push(cur);
+          return lines;
+        };
+
+        const cardHeightsPdf = filteredEvents.map((ev) => {
+          const sessions = Array.isArray(ev.sessions) && ev.sessions.length > 1 ? ev.sessions : null;
+          const mainDescLines = wrapLinesPdf(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
+          const clampedMainLines = Math.min(mainDescLines.length, 3);
+          const headerH = 18 + 20 + 20 + clampedMainLines * 18 + (sessions ? 14 : 18);
+
+          let sessionsH = 0;
+          if (sessions) {
+            sessionsH += 32;
+            for (const s of sessions) {
+              const sLines = wrapLinesPdf(s.description || "", CARD_W - 36 - 28, "400 12.5px Inter, sans-serif");
+              sessionsH += 12 + 18 + (sLines.length > 0 ? 6 + sLines.length * 18 : 0) + 12;
+            }
+            sessionsH += 18;
+          }
+
+          return Math.max(CARD_H_BASE, headerH + sessionsH);
         });
 
-        const rowH         = Math.max(...cardHeightsPdf) + CARD_GAP;
-        const ROWS_PER_COL = Math.max(1, Math.floor(MAX_COL_H / rowH));
-
-        const rowYStarts = filteredEvents.map((_, i) => {
-          const row = i % ROWS_PER_COL;
-          return OUTER_PAD + TITLE_H + row * rowH;
-        });
+        const rowYStarts = [];
+        let currYLogical = OUTER_PAD + TITLE_H;
+        for (let i = 0; i < filteredEvents.length; i++) {
+          rowYStarts.push(currYLogical);
+          currYLogical += cardHeightsPdf[i] + CARD_GAP;
+        }
 
         const canvas = await buildTimelineCanvas();
         const imgW   = canvas.width;
         const imgH   = canvas.height;
 
-        const isLandscape = imgW / imgH > 1.3;
+        const isLandscape = false;
         const pdf = new jsPDF({
-          orientation: isLandscape ? "landscape" : "portrait",
+          orientation: "portrait",
           unit: "pt",
           format: "a4",
         });
@@ -681,7 +837,7 @@ export default function TimelineView() {
         let pageBottomLogical = usableH / pxToPoint;
 
         for (let i = 0; i < rowYStarts.length; i++) {
-          const rowBottom = rowYStarts[i] + rowH;
+          const rowBottom = rowYStarts[i] + cardHeightsPdf[i];
           if (rowBottom > pageBottomLogical) {
             const snapY = rowYStarts[i];
             pageStartsLogical.push(snapY);
