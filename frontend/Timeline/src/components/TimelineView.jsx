@@ -473,9 +473,13 @@ export default function TimelineView() {
 
         const calcCardLayout = (ev) => {
           const sessions = Array.isArray(ev.sessions) && ev.sessions.length > 1 ? ev.sessions : null;
+          const titleText = ev.title || ev.name || "Untitled";
+          const titleLines = wrapLines(titleText, CARD_W - 36, "700 16px Inter, sans-serif");
+          const titleHeight = Math.max(1, titleLines.length) * 22;
+
           const mainDescLines = wrapLines(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
           const clampedMainLines = Math.min(mainDescLines.length, 3);
-          const headerH = 18 + 20 + 20 + clampedMainLines * 18 + (sessions ? 14 : 18);
+          const headerH = 18 + 20 + titleHeight + clampedMainLines * 18 + (sessions ? 14 : 18);
 
           let sessionsH = 0;
           let sessionRowLayouts = [];
@@ -492,7 +496,7 @@ export default function TimelineView() {
           }
 
           const totalCardH = Math.max(CARD_H_BASE, headerH + sessionsH);
-          return { cardH: totalCardH, sessions, sessionRowLayouts, clampedMainLines };
+          return { cardH: totalCardH, sessions, sessionRowLayouts, titleLines, clampedMainLines };
         };
 
         const cardLayouts = filteredEvents.map(calcCardLayout);
@@ -645,11 +649,15 @@ export default function TimelineView() {
           }
 
           ctx.font = "700 16px Inter, sans-serif"; ctx.fillStyle = textColor;
-          ctx.fillText(trunc(ev.title || ev.name || "Untitled", CARD_W - 36), cardX + 18, cardY + 36);
+          let titleY = cardY + 36;
+          for (const tLine of layout.titleLines) {
+            ctx.fillText(tLine, cardX + 18, titleY);
+            titleY += 22;
+          }
 
           ctx.font = "400 13px Inter, sans-serif"; ctx.fillStyle = subColor;
           const mainLines = wrapLines(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
-          let descY = cardY + 62;
+          let descY = titleY + 4;
           for (let m = 0; m < Math.min(mainLines.length, 3); m++) {
             ctx.fillText(mainLines[m], cardX + 18, descY);
             descY += 18;
@@ -789,9 +797,13 @@ export default function TimelineView() {
 
         const cardHeightsPdf = filteredEvents.map((ev) => {
           const sessions = Array.isArray(ev.sessions) && ev.sessions.length > 1 ? ev.sessions : null;
+          const titleText = ev.title || ev.name || "Untitled";
+          const titleLines = wrapLinesPdf(titleText, CARD_W - 36, "700 16px Inter, sans-serif");
+          const titleHeight = Math.max(1, titleLines.length) * 22;
+
           const mainDescLines = wrapLinesPdf(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
           const clampedMainLines = Math.min(mainDescLines.length, 3);
-          const headerH = 18 + 20 + 20 + clampedMainLines * 18 + (sessions ? 14 : 18);
+          const headerH = 18 + 20 + titleHeight + clampedMainLines * 18 + (sessions ? 14 : 18);
 
           let sessionsH = 0;
           if (sessions) {
