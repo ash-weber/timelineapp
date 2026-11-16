@@ -759,77 +759,16 @@ export default function TimelineView() {
           OUTER_PAD, totalH - 14
         );
 
-        return canvas;
+        return { canvas, rowPositions, cardLayouts, totalH, totalW, OUTER_PAD, TITLE_H, CARD_GAP, DPR };
       };
 
       if (exportFormat === "pdf") {
         const { default: jsPDF } = await import("jspdf");
 
-        const DPR         = 2;
-        const OUTER_PAD   = 48;
-        const CARD_W      = 520;
-        const CARD_H_BASE = 112;
-        const CARD_GAP    = 20;
-        const TITLE_H     = 84;
+        const { canvas, rowPositions, cardLayouts, totalH, DPR } = await buildTimelineCanvas();
+        const imgW = canvas.width;
+        const imgH = canvas.height;
 
-        const tempC = document.createElement("canvas");
-        const tempX = tempC.getContext("2d");
-        tempX.font  = "400 13px Inter, sans-serif";
-
-        const wrapLinesPdf = (text, maxW, font) => {
-          if (!text) return [];
-          tempX.font = font;
-          const words = text.split(" ");
-          const lines = [];
-          let cur = "";
-          for (const word of words) {
-            const test = cur ? cur + " " + word : word;
-            if (tempX.measureText(test).width > maxW && cur) {
-              lines.push(cur);
-              cur = word;
-            } else {
-              cur = test;
-            }
-          }
-          if (cur) lines.push(cur);
-          return lines;
-        };
-
-        const cardHeightsPdf = filteredEvents.map((ev) => {
-          const sessions = Array.isArray(ev.sessions) && ev.sessions.length > 1 ? ev.sessions : null;
-          const titleText = ev.title || ev.name || "Untitled";
-          const titleLines = wrapLinesPdf(titleText, CARD_W - 36, "700 16px Inter, sans-serif");
-          const titleHeight = Math.max(1, titleLines.length) * 22;
-
-          const mainDescLines = wrapLinesPdf(ev.description || "", CARD_W - 36, "400 13px Inter, sans-serif");
-          const clampedMainLines = Math.min(mainDescLines.length, 3);
-          const headerH = 18 + 20 + titleHeight + clampedMainLines * 18 + (sessions ? 14 : 18);
-
-          let sessionsH = 0;
-          if (sessions) {
-            sessionsH += 32;
-            for (const s of sessions) {
-              const sLines = wrapLinesPdf(s.description || "", CARD_W - 36 - 28, "400 12.5px Inter, sans-serif");
-              sessionsH += 12 + 18 + (sLines.length > 0 ? 6 + sLines.length * 18 : 0) + 12;
-            }
-            sessionsH += 18;
-          }
-
-          return Math.max(CARD_H_BASE, headerH + sessionsH);
-        });
-
-        const rowYStarts = [];
-        let currYLogical = OUTER_PAD + TITLE_H;
-        for (let i = 0; i < filteredEvents.length; i++) {
-          rowYStarts.push(currYLogical);
-          currYLogical += cardHeightsPdf[i] + CARD_GAP;
-        }
-
-        const canvas = await buildTimelineCanvas();
-        const imgW   = canvas.width;
-        const imgH   = canvas.height;
-
-        const isLandscape = false;
         const pdf = new jsPDF({
           orientation: "portrait",
           unit: "pt",
@@ -844,19 +783,51 @@ export default function TimelineView() {
         const usableH = pageH - MARGIN * 2 - HDR_H;
 
         const pxToPoint = usableW / (imgW / DPR);
+        const maxPageHLogical = usableH / pxToPoint;
 
-        const pageStartsLogical = [0];
-        let pageBottomLogical = usableH / pxToPoint;
+        // Collect all logical safe break points
+        const breakPoints = [0];
+        for (let i = 0; i < rowPositions.length; i++) {
+          const pos = rowPositions[i];
+          const layout = cardLayouts[i];
 
-        for (let i = 0; i < rowYStarts.length; i++) {
-          const rowBottom = rowYStarts[i] + cardHeightsPdf[i];
-          if (rowBottom > pageBottomLogical) {
-            const snapY = rowYStarts[i];
-            pageStartsLogical.push(snapY);
-            pageBottomLogical = snapY + usableH / pxToPoint;
+          // Point right before the card starts (in the gap)
+          breakPoints.push(pos.y - 10);
+
+          // If the card has sessions, add break lines between each session row
+          if (layout.sessions && layout.sessionRowLayouts?.length > 0) {
+            let sessionY = pos.y + (18 + 20 + Math.max(1, layout.titleLines.length) * 22 + Math.min(layout.clampedMainLines, 3) * 18 + 14 + 32);
+            for (let sIdx = 0; sIdx < layout.sessionRowLayouts.length; sIdx++) {
+              sessionY += layout.sessionRowLayouts[sIdx].height;
+              // Break point at the border between session rows
+              if (sIdx < layout.sessionRowLayouts.length - 1) {
+                breakPoints.push(sessionY);
+              }
+            }
           }
         }
-        pageStartsLogical.push(imgH / DPR);
+        breakPoints.push(totalH);
+
+        // Calculate pages greedily packing as much content as fits
+        const pageStartsLogical = [0];
+        while (pageStartsLogical[pageStartsLogical.length - 1] < totalH) {
+          const lastStart = pageStartsLogical[pageStartsLogical.length - 1];
+          const targetBottom = lastStart + maxPageHLogical;
+          if (targetBottom >= totalH) {
+            pageStartsLogical.push(totalH);
+            break;
+          }
+
+          // Find the largest valid break point that fits on this page
+          // Require at least 150px progress per page to avoid infinite loops
+          const validPoints = breakPoints.filter((bp) => bp > lastStart + 150 && bp <= targetBottom);
+          if (validPoints.length > 0) {
+            pageStartsLogical.push(validPoints[validPoints.length - 1]);
+          } else {
+            // In case no breakpoint exists in the range, slice at max height
+            pageStartsLogical.push(targetBottom);
+          }
+        }
 
         const pageCount = pageStartsLogical.length - 1;
 
@@ -906,11 +877,11 @@ export default function TimelineView() {
         return;
       }
 
-      const canvas  = await buildTimelineCanvas();
-      const isJpeg  = exportFormat === "jpeg";
-      const link    = document.createElement("a");
-      link.download = `${timelineName.replace(/\s+/g, "_")}.${isJpeg ? "jpg" : "png"}`;
-      link.href     = canvas.toDataURL(isJpeg ? "image/jpeg" : "image/png", isJpeg ? 0.92 : 1);
+      const { canvas } = await buildTimelineCanvas();
+      const isJpeg     = exportFormat === "jpeg";
+      const link       = document.createElement("a");
+      link.download    = `${timelineName.replace(/\s+/g, "_")}.${isJpeg ? "jpg" : "png"}`;
+      link.href        = canvas.toDataURL(isJpeg ? "image/jpeg" : "image/png", isJpeg ? 0.92 : 1);
       link.click();
 
     } catch (err) {
